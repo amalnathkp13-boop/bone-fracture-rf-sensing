@@ -47,7 +47,14 @@ class Vivaldi:
     taper_start  where the flare begins; before this is the parallel-strip feed
     sub_width    substrate width, which also bounds the outer edge of each arm
     aperture     slot opening at the mouth, which sets the low-frequency limit
-    feed_width   width of the parallel-strip conductors
+    feed_width   width of the parallel-strip conductors where the taper starts
+    feed_width_port
+                 width at the port. Different from feed_width makes the feed a
+                 linear impedance taper rather than a uniform line, which is
+                 the standard remedy when the antenna impedance and the 50 ohm
+                 source cannot be matched by a single line width. Measured
+                 here: median Re(Zin) is 43 / 29 / 19 ohm for feed widths of
+                 1.5 / 3.0 / 5.0 mm, so width buys impedance predictably
     rate         exponential opening rate per mm (proposal: 0.05 to 0.10)
     """
     length: float = 70.0
@@ -55,6 +62,7 @@ class Vivaldi:
     sub_width: float = 50.0
     aperture: float = 40.0
     feed_width: float = 3.0
+    feed_width_port: float | None = None   # None means no taper
     rate: float = 0.08
     substrate: str = "RO4350B"
 
@@ -66,6 +74,15 @@ class Vivaldi:
             raise ValueError("aperture must fit inside the substrate width")
         if self.taper_start >= self.length:
             raise ValueError("taper must start before the aperture mouth")
+        if self.feed_width_port is not None and self.feed_width_port <= 0:
+            raise ValueError("feed_width_port must be positive")
+
+    @property
+    def w_port(self) -> float:
+        """Strip width at the port; equals feed_width when untapered."""
+        if self.feed_width_port is None:
+            return self.feed_width
+        return self.feed_width_port
 
     @property
     def sub(self) -> dict:
@@ -98,6 +115,45 @@ class Vivaldi:
         x = np.asarray(x, float)
         a_coef, b_coef = self._coeffs
         return a_coef * np.exp(self.rate * (x - self.taper_start)) + b_coef
+
+    # --- what actually governs the match ---------------------------------
+
+    @property
+    def growth(self) -> float:
+        """The dimensionless opening parameter, rate x taper_length.
+
+        This, not the rate alone, is what sets the shape of the flare. An
+        exponential taper of a given total growth has the same profile however
+        long it is stretched, so quoting an opening rate without a taper length
+        - as proposal 2.3 does - does not specify the antenna.
+        """
+        return self.rate * self.taper_length
+
+    @property
+    def slot_start(self) -> float:
+        """Distance past taper_start at which the two inner edges cross y = 0.
+
+        Before this the arms still overlap and there is no slot at all; the
+        radiating flare only begins here.
+        """
+        a_coef, b_coef = self._coeffs
+        return float(np.log(-b_coef / a_coef) / self.rate)
+
+    @property
+    def flare_length(self) -> float:
+        """Length over which the slot actually opens, mm."""
+        return self.taper_length - self.slot_start
+
+    @property
+    def flare_ratio(self) -> float:
+        """Flare length divided by aperture: the design number that matters.
+
+        Below about 1 the slot opens over a distance shorter than its own
+        mouth, an opening angle above sixty degrees, and the wave reflects at
+        the mouth instead of radiating - the antenna becomes a resonator.
+        Well-behaved tapered slots sit near 1.5 to 2.
+        """
+        return self.flare_length / self.aperture
 
     def taper_points(self, n: int = 60) -> np.ndarray:
         """(n, 2) polyline along the inner taper, mouth-dense for smoothness."""
@@ -169,12 +225,13 @@ class Vivaldi:
         as the aperture and length were increased.
         """
         half_feed = self.feed_width / 2
-        pts = [(0.0, -half_feed)]
+        half_port = self.w_port / 2
+        pts = [(0.0, -half_port)]
         pts += [tuple(p) for p in self.taper_points(n)]
         pts += [(self.length, self.sub_width / 2),
                 (self.taper_start, self.sub_width / 2),
                 (self.taper_start, half_feed),
-                (0.0, half_feed)]
+                (0.0, half_port)]
         return np.array(pts, float)
 
     def lower_arm(self, n: int = 60) -> np.ndarray:

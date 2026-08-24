@@ -208,3 +208,53 @@ def test_polygon_does_not_self_intersect():
                 continue
             assert not seg_cross(pts[i], pts[(i + 1) % n],
                                  pts[j], pts[(j + 1) % n]), (i, j)
+
+
+# --- the growth parameter -------------------------------------------------
+
+def test_growth_is_rate_times_taper_length():
+    v = Vivaldi(length=120, taper_start=18, rate=0.025)
+    assert v.growth == pytest.approx(0.025 * 102)
+
+
+def test_slot_starts_after_the_taper_begins():
+    """The arms still overlap for a while; the slot opens later."""
+    v = Vivaldi()
+    assert 0 < v.slot_start < v.taper_length
+    assert v.taper(v.taper_start + v.slot_start) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_flare_length_and_ratio_are_consistent():
+    v = Vivaldi()
+    assert v.flare_length == pytest.approx(v.taper_length - v.slot_start)
+    assert v.flare_ratio == pytest.approx(v.flare_length / v.aperture)
+
+
+def test_lower_growth_lengthens_the_flare():
+    """The hypothesis the sweep tests: a*T governs the flare, not the rate."""
+    T = 102.0
+    ratios = [Vivaldi(length=120, taper_start=18, aperture=44, sub_width=54,
+                      rate=g / T).flare_ratio for g in (1.5, 2.5, 4.0)]
+    assert ratios[0] > ratios[1] > ratios[2]
+
+
+def test_equal_growth_gives_a_similar_flare_at_any_length():
+    """An exponential of fixed total growth has the same shape when stretched.
+
+    This is why quoting an opening rate without a taper length, as proposal 2.3
+    does, does not specify the antenna.
+    """
+    short = Vivaldi(length=70, taper_start=20, aperture=40, sub_width=50,
+                    rate=2.0 / 50)
+    long_ = Vivaldi(length=120, taper_start=20, aperture=40, sub_width=50,
+                    rate=2.0 / 100)
+    assert short.growth == pytest.approx(long_.growth)
+    # Slot opens at the same fraction of the taper in both.
+    assert (short.slot_start / short.taper_length ==
+            pytest.approx(long_.slot_start / long_.taper_length, rel=1e-6))
+
+
+def test_original_design_had_a_pathological_flare_ratio():
+    """Regression on the diagnosis: the first design flared far too fast."""
+    assert Vivaldi().flare_ratio < 1.0
+    assert Vivaldi().growth == pytest.approx(4.0)

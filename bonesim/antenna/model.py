@@ -43,7 +43,8 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
           air: float = 30.0, max_res_air: float = 1.2,
           max_res_sub: float = 0.7, n_taper: int = 60,
           end_criteria: float = 1e-4, max_timesteps: int = 60000,
-          nf2ff_freqs=None, boundary: str = "PML_8"):
+          nf2ff_freqs=None, boundary: str = "PML_8",
+          sub_cells: int = 6):
     """Assemble the FDTD problem. Returns (FDTD, CSX, port, nf2ff).
 
     air, max_res_* are in millimetres, matching the mesh unit.
@@ -96,26 +97,35 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
     bot = csx.AddMetal("arm_bottom")
     bot.AddPolygon(lower.T.tolist(), 2, 0.0, priority=10)
 
+    hw = ant.w_port / 2
+
     # --- feed ------------------------------------------------------------
     # A lumped port across the substrate at x = 0, between the overlapping
     # arms. That overlap is a parallel-strip line, which is why the antipodal
     # form needs no separate balun.
+    # Extending the strips behind the port into the PML was tried and is a
+    # trap: PEC inside a PML never lets the energy decay, and a single run went
+    # from 45 s to over ten minutes without converging.
     port = fdtd.AddLumpedPort(
-        1, 50, [0, -ant.feed_width / 2, 0], [0, ant.feed_width / 2, h],
+        1, 50, [0, -hw, 0], [0, hw, h],
         "z", 1.0, priority=5, edges2grid="xy")
 
     # --- mesh ------------------------------------------------------------
     # Substrate faces and the feed must land exactly on mesh lines; the taper
     # is sampled so the flare edge is not stepped too coarsely.
-    x_lines = [-air, 0.0, ant.length, ant.length + air]
+    x_lines = [-air, 0.0, ant.taper_start, ant.length, ant.length + air]
     x_lines += list(np.linspace(ant.taper_start, ant.length, 12))
     y_lines = [-ant.sub_width / 2 - air, -ant.sub_width / 2,
-               -ant.feed_width / 2, 0.0, ant.feed_width / 2,
+               -ant.feed_width / 2, -ant.w_port / 2, 0.0,
+               ant.w_port / 2, ant.feed_width / 2,
                ant.sub_width / 2, ant.sub_width / 2 + air]
     y_lines += list(np.linspace(-ant.aperture / 2, ant.aperture / 2, 9))
-    # Three lines through the substrate thickness is the practical minimum for
-    # a parallel-strip feed; fewer and the field between the arms is unresolved.
-    z_lines = [-air, 0.0, h / 2, h, h + air]
+    # The port integrates E across the substrate and H around the strip, so it
+    # needs several cells through the thickness, not the bare minimum of three.
+    z_lines = [-air] + list(np.linspace(0.0, h, sub_cells + 1)) + [h + air]
+    # Refine in-plane around the port as well, for the same reason.
+    x_lines += list(np.linspace(0.0, 3.0, 4))
+    y_lines += list(np.linspace(-ant.feed_width, ant.feed_width, 9))
 
     mesh.AddLine("x", x_lines)
     mesh.AddLine("y", y_lines)

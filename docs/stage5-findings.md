@@ -90,35 +90,95 @@ curved strip about 3 mm wide instead of a broad flare. In an antipodal Vivaldi
 the arm is a broad conductor and it is the *slot between* the inner edges that
 tapers. Reverted; the reasoning is kept in `Vivaldi.outer` so it is not retried.
 
+## The root cause, measured
+
+After four geometry hypotheses had been tried and disproved, the input
+impedance was measured instead of inferred - which should have been the first
+move, not the fifth:
+
+| f (GHz) | Re(Zin) | Im(Zin) | S11 |
+|---|---|---|---|
+| 3 | 13 | -16 | -4.2 dB |
+| 5 | 19 | +13 | -6.2 |
+| 7 | 56 | -7 | **-21.7** |
+| 9 | 13 | +13 | -4.3 |
+| 11 | 21 | -3 | -7.9 |
+
+Median Re(Zin) across the band is **27 ohm against a 50 ohm port**, swinging
+from 12 to 116 ohm. Where it happens to land near 50 + j0, at 7 GHz, the match
+is excellent at -21.7 dB. The antenna radiates perfectly well; it is the feed
+impedance that is wrong, and worse, unstable with frequency.
+
+**Feed width controls the median predictably**, exactly as parallel-strip
+theory says (Z0 proportional to h/w):
+
+| feed width | median Re(Zin) |
+|---|---|
+| 1.5 mm | 43 ohm |
+| 3.0 mm | 29 ohm |
+| 5.0 mm | 19 ohm |
+
+but fixing the median does not fix the swing, and the swing is what destroys
+the bandwidth: at 1.5 mm the median is a respectable 43 ohm and the matched
+band is still only 0.55 GHz.
+
+## Hypotheses tested and eliminated
+
+Recorded so none of them is retried.
+
+| # | hypothesis | outcome |
+|---|---|---|
+| 1 | aperture and length too small for 3 GHz | disproved: bigger was *worse* |
+| 2 | absorbing boundary inside the near field | real fix (2x faster, converges) but **no change to S11** |
+| 3 | outer edge should be curved, not stepped | much worse: band 1.7 -> 0.25 GHz |
+| 4 | flare too abrupt (the a*T growth parameter) | disproved: flare/aperture 1.46 -> 2.01 changed nothing |
+| 5 | feed width sets the impedance | **confirmed for the median**, does not fix the swing |
+| 6 | tapered feed width (impedance transition) | no improvement; spread widened to 19-283 ohm |
+| 7 | feed line run into the PML | pathological: PEC in PML never decays, 45 s became >10 min |
+| 8 | the swing is a meshing artefact | disproved: 3 to 10 cells through the substrate moved the median 27 to 28 ohm and the spread 12-116 to 13-102 ohm |
+
+Hypothesis 8 matters most, because it closes the last modelling doubt. The
+impedance behaviour is physical for this geometry, not an artefact of an
+under-resolved port.
+
 ## What is actually unresolved
 
 Best achieved: about 1.7 GHz of contiguous -10 dB match, against a required
-8 GHz. The structure still behaves resonantly - band centre tracks
-L/lambda_g of roughly 4.5 to 5.1 across configurations, which is a standing
-wave along the taper rather than a travelling wave leaving the mouth.
+8 GHz. The blocker is now precisely located: **the antenna presents roughly
+27 ohm with a 12-116 ohm swing across the band, and this topology cannot be
+matched to 50 ohm over 3-11 GHz by any of the parameters exposed here.**
+
+Two things follow, and they are worth stating in the report because they are
+findings rather than failures.
 
 **Proposal 2.3 under-specifies the antenna.** It gives one parameter, the
-opening rate, and asserts that 0.05-0.10 per mm "gives a clean 3-11 GHz match".
-Six geometries inside that range, spanning 70-110 mm length and 40-60 mm
-aperture, produced nothing close. The rate is not the governing parameter.
+opening rate, and asserts 0.05-0.10 per mm "gives a clean 3-11 GHz match". That
+cannot be right on its own: what governs the flare is the dimensionless product
+of rate and taper length, so a rate quoted without a length specifies nothing.
+Eleven geometries were simulated across 70-120 mm length, 40-60 mm aperture and
+rate 0.015-0.08, and none came close.
 
-Plausible next steps, in the order worth trying:
+**The feed, not the flare, is the hard part.** Every parameter that changes the
+radiating structure was varied with little effect, while the one that changes
+the feed impedance moved it predictably. An antipodal Vivaldi covering an
+octave and a half needs a genuine microstrip-to-parallel-strip transition with
+a tapered ground plane, which is a different topology from the uniform
+parallel-strip feed modelled here.
 
-1. **Soften the outer-edge step without thinning the arm** - curve it out to
-   the substrate edge over the first 20-30% of the taper, then hold it there.
-   This is the middle ground between the two versions tried.
-2. **Check the feed impedance directly** rather than inferring it. A
-   parallel-strip line of 3 mm on 0.762 mm RO4350B computes to roughly 40 ohm
-   against the 50 ohm port; a short line of the correct width, or a tapered
-   section, would remove that.
-3. **Add corrugations or a slot-edge termination** at the mouth, the standard
-   remedy when a tapered slot reflects instead of radiating.
-4. Compare against a published antipodal Vivaldi with stated dimensions before
-   optimising further, so the model is validated against a known-good design.
+## Recommended next step
 
-That is a genuine antenna-design exercise. It is worth doing if the antenna is
-a report deliverable in its own right; it is not worth blocking Stages 6-7 for,
-since the imaging model does not use it.
+**Reproduce a published design before optimising further.** Take an antipodal
+Vivaldi from the literature with fully stated dimensions, build it in this same
+openEMS model, and confirm it reproduces the published S11. That separates two
+possibilities which no amount of further parameter sweeping can:
+
+- the model is faithful and this feed topology simply cannot cover the band, or
+- something in the model - the lumped-port launch in particular - misrepresents
+  the feed, in which case the design conclusions above need revisiting
+
+Doing this first would have been cheaper than eight hypotheses. It is the
+lesson worth carrying: when a simulation disagrees with a design rule, validate
+the simulation against a known-good case before trusting either.
 
 ## Reproducing
 
