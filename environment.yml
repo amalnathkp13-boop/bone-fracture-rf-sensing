@@ -1,0 +1,27 @@
+# Reproduce with:  conda env create -f environment.yml
+# Requires conda-forge (Miniforge recommended - no Anaconda ToS constraints).
+#
+# Deliberately lean: this is the Path A (UWB imaging) stack only. Mesh/FEM
+# packages (gmsh, pyvista) belong to Path B and are not installed - they pull
+# VTK, Qt6 and LLVM for no benefit here.
+name: bonesim
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - scipy
+  - matplotlib
+  - h5py
+  - cython
+  - psutil
+  - colorama
+  - pip
+  - scikit-learn
+  - pandas
+  - tqdm
+  - scikit-rf      # Touchstone / S-parameter handling
+  - pytest
+  - pip:
+      - terminaltables
+      # gprMax is built from source against this env - see docs/install.md

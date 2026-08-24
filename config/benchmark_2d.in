@@ -1,0 +1,21 @@
+#title: bonesim throughput benchmark - production-scale 2D cell budget
+##
+## Sized to the real Path A imaging problem, not the smoke test:
+##   0.2 mm cells (resolves a 0.3 mm kerf), 140 x 100 mm domain, 3 ns window.
+## Purpose is wall-clock per scan position, which sets the whole compute budget.
+
+#domain: 0.140 0.100 0.0002
+#dx_dy_dz: 0.0002 0.0002 0.0002
+#time_window: 3e-9
+
+#material: 5.0 0.6 1 0 fatlike
+#material: 42 6.0 1 0 musclelike
+#material: 12 0.4 1 0 bonelike
+
+#box: 0 0.030 0 0.140 0.070 0.0002 musclelike
+#box: 0 0.070 0 0.140 0.074 0.0002 fatlike
+#cylinder: 0.070 0.050 0 0.070 0.050 0.0002 0.010 bonelike
+
+#waveform: gaussiandot 1 7e9 pulse
+#hertzian_dipole: z 0.070 0.086 0 pulse
+#rx: 0.070 0.086 0

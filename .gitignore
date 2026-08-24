@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+*.egg-info/
+.venv/
+
+# simulation artefacts (regenerate via scripts/, never commit)
+runs/
+out/
+*.h5
+*.hdf5
+*.vti
+*.vtp
+*.npz
+figures/*.png
+figures/*.pdf
+!figures/.gitkeep
+
+# gprMax generated input decks
+*.in
+!config/*.in

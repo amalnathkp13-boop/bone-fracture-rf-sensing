@@ -1,0 +1,14 @@
+#title: homogeneous muscle, two-receiver propagation test
+
+#domain: 0.1000 0.0600 0.0002
+#dx_dy_dz: 0.0002 0.0002 0.0002
+#time_window: 2e-09
+
+#material: 9.20366 0.867599 1 0 muscle
+#add_dispersion_debye: 2 39.6209 7.56898e-12 5.05775 2.79524e-11 muscle
+#box: 0 0 0 0.1000 0.0600 0.0002 muscle
+
+#waveform: gaussiandot 1 7e9 pulse
+#hertzian_dipole: z 0.0200 0.0300 0 pulse
+#rx: 0.0350 0.0300 0
+#rx: 0.0400 0.0300 0

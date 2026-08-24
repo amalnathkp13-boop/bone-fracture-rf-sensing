@@ -1,0 +1,6 @@
+# Everything in this repo is consumed by Linux tooling under WSL2.
+# CRLF would break shell scripts ("bad interpreter") and gprMax input decks.
+* text=auto eol=lf
+*.sh text eol=lf
+*.in text eol=lf
+*.py text eol=lf
