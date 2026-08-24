@@ -147,86 +147,108 @@ under-resolved port.
 
 ## Validation against a known-good design
 
-The recommendation from the first pass was to stop sweeping parameters and
-validate the model against something whose answer is already known. That was
-done, and it was decisive.
+Stop sweeping parameters, validate the model. That was decisive.
 
 **The toolchain is correct.** openEMS ships `Simple_Patch_Antenna.py`, whose
-documented result is a resonance near 2.4 GHz. Run here it gives:
+documented result is a resonance near 2.4 GHz. Run here it gives 2.430 GHz,
+S11 -26.9 dB, and **Zin = 49.7 + 4.5j ohm** at resonance. A properly modelled
+antenna returns 50 ohm.
 
-| quantity | measured | documented |
+**Comparing it to this model found the defect.** The tutorial calls
+`FDTD.AddEdges2Grid(..., metal_edge_res=mesh_res/2)` on every metal; this model
+never did. A patch has straight axis-aligned edges and tolerates a hand-placed
+grid. A Vivaldi is defined by two curved exponential edges, and near the feed
+the gap between them passes through zero over a few millimetres - staircased
+onto a uniform 1.2 mm grid, that launch was two or three cells wide.
+
+Mesh 0.33 M to 4.8 M cells; impedance spread 12-116 ohm to 14-77 ohm.
+
+## The design that works
+
+Four things had to be right. None is stated in proposal 2.3, which specifies
+only an opening rate.
+
+| # | fix | effect on -10 dB coverage |
 |---|---|---|
-| resonance | **2.430 GHz** | near 2.4 GHz |
-| S11 at resonance | -26.9 dB | deep dip |
-| Zin at resonance | **49.7 + 4.5j ohm** | 50 ohm by design |
+| 1 | metal edges snapped and refined | model became trustworthy |
+| 2 | microstrip feed with a tapered ground balun | 0.75 -> 2.75 GHz |
+| 3 | aperture from the **free-space** half wavelength | 3-6 GHz began to match |
+| 4 | arms wide enough to carry current | 5.35-8.60 -> **4.35-12.00 GHz** |
 
-Installation, Python bindings, lumped port and S-parameter extraction all
-behave. A properly modelled antenna returns 49.7 ohm.
+### The feed (fix 2)
 
-**The Vivaldi model had a real defect, and comparing the two found it.** The
-tutorial calls `FDTD.AddEdges2Grid(dirs='xy', properties=..., metal_edge_res=
-mesh_res/2)` for every metal. This model never did.
+The classic Gazit topology in three sections: a 50 ohm microstrip, an
+elliptical ground taper converting the asymmetric microstrip mode to the
+symmetric parallel-strip mode gradually, then the flare. The original model
+went straight to a bare parallel strip driven at the board edge, with nothing
+transitioning the 50 ohm source onto it.
 
-A patch has straight, axis-aligned edges and survives a hand-placed grid. A
-Vivaldi is *defined* by two curved exponential edges, and near the feed the gap
-between them passes through zero over a few millimetres. Staircased onto a
-uniform 1.2 mm grid, that launch is represented by two or three cells and means
-nothing.
+### The aperture (fix 3)
 
-Adding edge refinement took the mesh from 0.33 M to 4.8 M cells and tightened
-the impedance spread from **12-116 ohm to 14-77 ohm**. The model is now
-trustworthy - which is what makes everything below a statement about the
-design rather than about the simulation.
+Sized from `c / (2 * aperture)`, in free space. Using the substrate's effective
+permittivity flatters it badly:
 
-## What the validated model says
+| aperture | via eps_eff | free space |
+|---|---|---|
+| 44 mm | 2.28 GHz | **3.41 GHz** - above the band edge |
+| 60 mm | 1.67 GHz | 2.50 GHz |
 
-With the mesh fixed, feed width sets the median input impedance cleanly, and
-50 ohm is reachable:
+The 44 mm design could never have matched at 3 GHz, and the optimistic formula
+hid that for several iterations.
 
-| feed width | median Re(Zin) | spread | -10 dB band | mean |
-|---|---|---|---|---|
-| 1.2 mm | 67 ohm | 23-241 | 7.40-8.25 GHz | -9.1 dB |
-| **1.8 mm** | **51 ohm** | 18-133 | 8.25-9.30 GHz | -11.1 dB |
-| 3.0 mm | 30 ohm | 14-77 | 11.25-12.00 GHz | -11.4 dB |
+### The arms (fix 4)
 
-A 1.8 mm feed lands the median on 51 ohm, essentially the 50 ohm target. **The
-match is still only about 1 GHz wide**, because Re(Zin) still swings from 18 to
-133 ohm across the band. There is also a trade: narrowing the feed raises the
-median toward 50 ohm but widens the swing.
+Aperture 60 mm inside a 70 mm board leaves each arm a **5 mm sliver**. Widening
+the board to 90 mm gives 15 mm arms, and the band moved from 5.35-8.60 GHz to
+4.35-12.00 GHz - the single largest improvement of the whole stage.
 
-So the conclusion, now resting on a validated model:
+### Result
 
-**The median impedance is solved; the frequency variation is not, and it is a
-property of this feed topology.** A uniform parallel-strip line running into an
-abrupt flare cannot present a stable impedance over an octave and a half. What
-is needed is a genuine microstrip-to-parallel-strip transition with a tapered
-ground plane - a different topology from the one modelled here, not another
-value of an existing parameter.
+| | value |
+|---|---|
+| -10 dB match | **4.35 - 12.00 GHz contiguous** |
+| mean over 3-11 GHz | **-14.9 dB** |
+| median Re(Zin) | 41 ohm |
+| below -10 dB | everything from 5 to 11 GHz |
+| board | 150 x 90 mm, fits the 100 x 150 mm stock already in the BOM |
 
-## What is actually unresolved
+Available as `bonesim.antenna.vivaldi.uwb_3_11()`.
 
-Best achieved: about 1.7 GHz of contiguous -10 dB match against a required
-8 GHz, and separately a median impedance of 51 ohm at a 1.8 mm feed. The two
-have not been achieved together.
+## What is still short, and why corrugations did not fix it
 
-**Proposal 2.3 under-specifies the antenna.** It gives one parameter, the
-opening rate, and asserts 0.05-0.10 per mm "gives a clean 3-11 GHz match". What
-governs the flare is the dimensionless product of rate and taper length, so a
-rate quoted without a length specifies nothing; and in any case the flare was
-never the binding constraint. Thirteen geometries were simulated across
-70-120 mm length, 40-60 mm aperture, rate 0.015-0.08 and feed widths
-1.2-6.0 mm.
+3.0 to 4.35 GHz. Re(Zin) ripples there - 117 ohm at 3.0 GHz against 24.5 ohm at
+4.0 GHz - which is edge-current resonance, and corrugated outer edges are the
+standard remedy.
 
-**The feed, not the flare, is the hard part.** Every parameter changing the
-radiating structure moved the answer very little; the feed parameters moved it
-predictably and are where the remaining work is.
+They were implemented and run, and they are impractical here, for a reason that
+was not the expected one. **They cost nothing in mesh**: 7.40 M cells either
+way, identical minimum cell and time step, because the slot edges fall inside
+refinement the flare already required. What they cost is **convergence**. The
+slots are resonant by design - that is how they lengthen the current path - so
+they ring, and the energy will not decay to the -40 dB end criterion:
 
-## Recommended next step
+| | recorded steps | wall time |
+|---|---|---|
+| plain | 336, converged | 795 s |
+| corrugated | 1,735 and rising | 70 min, abandoned |
 
-Implement the proper feed: a microstrip section, a ground plane tapering to a
-parallel strip, then the flare. That is the standard antipodal Vivaldi
-topology and the one thing not yet tried. The model is now validated well
-enough to trust the result when it is.
+Advancing 12 steps per 30 s against a 60,000-step cap, the extrapolated runtime
+was about 40 hours. Revisiting them means shallower and fewer slots, and
+relaxing EndCriteria: a design that rings by intent cannot be judged by a decay
+criterion tuned for one that does not.
+
+## Status
+
+**Stage 5 delivers a working UWB antenna covering 4.35-12.00 GHz**, against a
+3-11 GHz specification. 6.65 of the 8 GHz target band is matched, and the
+shortfall is characterised rather than mysterious.
+
+The stage began at 4.00-6.40 GHz with a mean of -10.9 dB and an input impedance
+of 27 ohm. It ends at 7.65 GHz of contiguous match, -14.9 dB mean, 41 ohm - on a
+board already in the bill of materials.
+
+Not on the critical path either way: the imaging model excites with a hertzian
+dipole in gprMax, not with this antenna.
 
 ## Reproducing
 

@@ -393,8 +393,22 @@ def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
     materials, so this costs nothing extra to fabricate.
 
     corrugations > 0 adds slots to the outer edges, the standard remedy for the
-    remaining low-frequency ripple. They multiply the mesh size several-fold,
-    so pass them deliberately.
+    remaining low-frequency ripple. **Measured here to be impractical, and not
+    for the reason expected.**
+
+    They cost nothing in mesh: 7.40 M cells either way, identical minimum cell
+    and time step, because the slot edges fall inside refinement the flare
+    already required. What they cost is *convergence*. The slots are resonant
+    by design - that is how they lengthen the current path - so they ring, and
+    the stored energy will not decay to the -40 dB end criterion. The plain
+    design converged in 336 recorded steps and 795 s; the corrugated one was
+    still going after 70 minutes at 1,735 steps, advancing 12 steps per 30 s
+    against a 60,000-step cap. Extrapolated runtime was about 40 hours, so it
+    was abandoned rather than finished.
+
+    If corrugations are revisited, make them shallower and fewer, and expect to
+    relax EndCriteria - a design that rings by intent cannot be judged by a
+    decay criterion tuned for one that does not.
     """
     w_feed = 1.74 if substrate == "RO4350B" else 3.08   # 50 ohm microstrip
     return Vivaldi(length=150.0, taper_start=20.0, feed_len=8.0,
