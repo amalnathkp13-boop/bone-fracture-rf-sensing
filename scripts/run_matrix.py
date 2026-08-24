@@ -67,6 +67,9 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--gpu", action="store_true",
                     help="pass -gpu to gprMax (NVIDIA only)")
+    ap.add_argument("--max-hours", type=float, default=0.0,
+                    help="stop cleanly after this long, rather than being "
+                         "killed mid-cell when a hosted session is reclaimed")
     ap.add_argument("--n-proc", type=int, default=4)
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
@@ -108,8 +111,18 @@ def main() -> int:
         return 0
 
     print()
+    started = time.time()
     times: list[float] = []
     for i, c in enumerate(todo, 1):
+        # Stop before the budget rather than during a cell. A cell killed
+        # part-way leaves no .npz and is simply redone next time, but stopping
+        # cleanly means the log ends with an accurate count.
+        if args.max_hours and times:
+            elapsed = time.time() - started
+            if elapsed + float(np.median(times)) > args.max_hours * 3600:
+                print(f"  stopping at {human(elapsed)}: the next cell would "
+                      f"exceed the {args.max_hours:g} h budget")
+                break
         t0 = time.time()
         try:
             d = run_bscan(c.phantom, scratch / c.key, plan=PLAN, grid=GRID,

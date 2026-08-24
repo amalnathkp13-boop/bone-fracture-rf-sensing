@@ -20,3 +20,6 @@ figures/*.pdf
 # gprMax generated input decks
 *.in
 !config/*.in
+
+# generated for upload, regenerate with scripts/package_for_colab.py
+bonesim_colab.zip
