@@ -37,14 +37,45 @@ class BScanPlan:
         return np.linspace(self.f_lo, self.f_hi, self.n_freq)
 
 
+def expected_outputs(work, decks) -> list[Path]:
+    """Filenames gprMax will write for these decks.
+
+    With -n 1 it writes <stem>.out; with -n N it writes <stem>1.out to
+    <stem>N.out.
+    """
+    work = Path(work)
+    out = []
+    for stem, n in decks:
+        if n == 1:
+            out.append(work / f"{stem}.out")
+        else:
+            out.extend(work / f"{stem}{i}.out" for i in range(1, n + 1))
+    return out
+
+
 def run_bscan(phantom, work_dir, plan: BScanPlan | None = None,
               grid: GridSpec | None = None, materials=None,
-              n_proc: int = 4, threads: int = 4, clean: bool = True,
+              n_proc: int = 4, threads: int = 4, clean: bool = False,
+              resume: bool = True, timeout: float = 86400,
               wsl_distro="Ubuntu") -> ScanData:
     """Generate, run and assemble one B-scan.
 
     The free-space reference is run alongside the scan chunks. It is a single
     model and does not depend on scan position, so one serves the whole B-scan.
+
+    Resumable by default. If every output a set of decks would produce is
+    already present, the solve is skipped and the existing files are assembled.
+    This is not a nicety: a B-scan is ten minutes of compute, the laptop can
+    suspend mid-run, and a hosted GPU session can be reclaimed at any time.
+    Stage 4 lost a completed 62-model scan to a driver timeout that fired while
+    the machine was asleep, with every output file sitting on disk intact.
+
+    The same property is what makes the matrix safe to run on Colab, where the
+    unit of checkpointing is one B-scan.
+
+    timeout is deliberately a full day. It exists to catch a wedged solver, not
+    to bound normal work, and a tight value turns an ordinary suspend into a
+    lost run.
     """
     plan = plan or BScanPlan()
     grid = grid or GridSpec()
@@ -75,7 +106,13 @@ def run_bscan(phantom, work_dir, plan: BScanPlan | None = None,
                     title="bonesim free-space reference"))
     decks.append(("ref", 1))
 
-    run_models(work, decks, threads=threads, wsl_distro=wsl_distro)
+    missing = [p for p in expected_outputs(work, decks) if not p.exists()]
+    if resume and not missing:
+        print(f"    {work.name}: all {len(expected_outputs(work, decks))} "
+              f"outputs present, skipping solve")
+    else:
+        run_models(work, decks, threads=threads, wsl_distro=wsl_distro,
+                   timeout=timeout)
 
     z_ant = -(phantom.standoff if phantom is not None else 0.0)
     return assemble(work, stems, "ref", plan.f, x, z_ant,

@@ -140,8 +140,12 @@ WRITE_MODELS = (
     "from pathlib import Path\n\n"
     'W = Path("/content/work")\n'
     "W.mkdir(exist_ok=True)\n\n"
-    "MODEL_A = r" + repr(MODEL_A) + "\n\n"
-    "MODEL_B = r" + repr(MODEL_B) + "\n\n"
+    # repr() already emits a correctly escaped Python literal. It must NOT be
+    # prefixed with r: in a raw string the \n stay as literal backslash-n, the
+    # deck is written as a single line, and gprMax rejects it for having no
+    # #domain command.
+    "MODEL_A = " + repr(MODEL_A) + "\n\n"
+    "MODEL_B = " + repr(MODEL_B) + "\n\n"
     '(W / "model_a.in").write_text(MODEL_A)\n'
     '(W / "model_b.in").write_text(MODEL_B)\n\n'
     '# Cell counts and iteration counts, so throughput is comparable.\n'

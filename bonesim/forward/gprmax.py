@@ -115,6 +115,12 @@ def build_geometry(phantom, grid: GridSpec) -> str:
                 lines.append(box(fr.fill, za, zb,
                                  fr.x + shift - fr.kerf / 2,
                                  fr.x + shift + fr.kerf / 2))
+
+    # Optional cylindrical targets, used by the brass-rod validation gate.
+    for x_c, z_c, r, mat in getattr(phantom, "cylinders", lambda: [])():
+        y_c = y_skin - z_c
+        lines.append(f"#cylinder: {x_c:.4f} {y_c:.4f} 0 "
+                     f"{x_c:.4f} {y_c:.4f} {grid.dx:.4f} {r:.4f} {mat}")
     return "\n".join(lines)
 
 
@@ -198,7 +204,7 @@ def assemble(work, stems, reference_stem: str, f_out, x, z_antenna,
 
 
 def run_models(work, decks, threads: int = 4, wsl_distro="Ubuntu",
-               conda_env: str = "bonesim", timeout: float = 7200) -> None:
+               conda_env: str = "bonesim", timeout: float = 86400) -> None:
     """Run gprMax decks concurrently.
 
     Four processes of four threads each, never one process across sixteen: the

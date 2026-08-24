@@ -122,7 +122,16 @@ gprMax ships a CUDA solver behind the `-gpu` flag, requiring an NVIDIA card and
 pycuda. The RX 6800M is AMD, so this is unavailable locally and every figure
 above is CPU-only.
 
-It is available on a hosted NVIDIA GPU, which makes Google Colab a genuine
-option for the matrix - see `docs/colab.md`. Note the trade: Colab's free tier
-provides only two vCPUs, so a *CPU* run there would be several times slower than
-this laptop. The GPU is the entire reason to consider it.
+It is available on a hosted NVIDIA GPU. Measured on a Colab Tesla T4:
+
+| model | local | Colab CPU | Colab GPU | GPU vs local |
+|---|---|---|---|---|
+| non-dispersive benchmark | 178 M | 64 M | 1467 M | 8.24x |
+| production model, Debye | 74 M | 14 M | 532 M | **7.18x** |
+
+**The matrix moves to Colab: 32.5 h locally, 4.5 h on a T4.**
+
+Colab's CPU is five times *slower* than this laptop on the production model
+(14 M against 74 M) - two vCPUs against sixteen threads. The GPU is the entire
+reason to go there, and a run where `-gpu` fails to engage is a significant
+downgrade rather than a fallback. See `docs/colab.md`.
