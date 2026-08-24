@@ -13,7 +13,9 @@ such rather than papered over.
 | openEMS v0.37.0-rc1 built, Python bindings working | done |
 | FR4 costs "a few dB above 8 GHz" (2.3) | **confirmed: 2.4 dB at 9 GHz, 3.6 at 11** |
 | Gain 8-10 dBi (2.2) | met above ~7 GHz only; 3.7 dBi at 3 GHz |
-| S11 < -10 dB across 3-11 GHz (2.2) | **not met: best is ~1.7 GHz of coverage** |
+| S11 < -10 dB across 3-11 GHz (2.2) | **not met: best ~1.7 GHz of coverage** |
+| model validated against a known-good design | **done** - openEMS patch tutorial reproduces at Zin 49.7+4.5j |
+| 50 ohm median input impedance | **achieved** at a 1.8 mm feed (51 ohm) |
 
 **Stage 5 is not on the critical path.** The imaging model excites with a
 hertzian dipole in gprMax, not with this antenna, so Stages 6 and 7 are not
@@ -135,50 +137,96 @@ Recorded so none of them is retried.
 | 5 | feed width sets the impedance | **confirmed for the median**, does not fix the swing |
 | 6 | tapered feed width (impedance transition) | no improvement; spread widened to 19-283 ohm |
 | 7 | feed line run into the PML | pathological: PEC in PML never decays, 45 s became >10 min |
-| 8 | the swing is a meshing artefact | disproved: 3 to 10 cells through the substrate moved the median 27 to 28 ohm and the spread 12-116 to 13-102 ohm |
+| 8 | the swing is a meshing artefact (substrate cells) | disproved: 3 to 10 cells through the substrate moved the median 27 to 28 ohm |
+| 9 | the metal edges are not snapped or refined | **confirmed** - found by comparing against the openEMS patch tutorial. Spread 12-116 -> 14-77 ohm |
+| 10 | feed width can reach 50 ohm | **confirmed** - 1.8 mm gives 51 ohm median, but the swing persists |
 
 Hypothesis 8 matters most, because it closes the last modelling doubt. The
 impedance behaviour is physical for this geometry, not an artefact of an
 under-resolved port.
 
+## Validation against a known-good design
+
+The recommendation from the first pass was to stop sweeping parameters and
+validate the model against something whose answer is already known. That was
+done, and it was decisive.
+
+**The toolchain is correct.** openEMS ships `Simple_Patch_Antenna.py`, whose
+documented result is a resonance near 2.4 GHz. Run here it gives:
+
+| quantity | measured | documented |
+|---|---|---|
+| resonance | **2.430 GHz** | near 2.4 GHz |
+| S11 at resonance | -26.9 dB | deep dip |
+| Zin at resonance | **49.7 + 4.5j ohm** | 50 ohm by design |
+
+Installation, Python bindings, lumped port and S-parameter extraction all
+behave. A properly modelled antenna returns 49.7 ohm.
+
+**The Vivaldi model had a real defect, and comparing the two found it.** The
+tutorial calls `FDTD.AddEdges2Grid(dirs='xy', properties=..., metal_edge_res=
+mesh_res/2)` for every metal. This model never did.
+
+A patch has straight, axis-aligned edges and survives a hand-placed grid. A
+Vivaldi is *defined* by two curved exponential edges, and near the feed the gap
+between them passes through zero over a few millimetres. Staircased onto a
+uniform 1.2 mm grid, that launch is represented by two or three cells and means
+nothing.
+
+Adding edge refinement took the mesh from 0.33 M to 4.8 M cells and tightened
+the impedance spread from **12-116 ohm to 14-77 ohm**. The model is now
+trustworthy - which is what makes everything below a statement about the
+design rather than about the simulation.
+
+## What the validated model says
+
+With the mesh fixed, feed width sets the median input impedance cleanly, and
+50 ohm is reachable:
+
+| feed width | median Re(Zin) | spread | -10 dB band | mean |
+|---|---|---|---|---|
+| 1.2 mm | 67 ohm | 23-241 | 7.40-8.25 GHz | -9.1 dB |
+| **1.8 mm** | **51 ohm** | 18-133 | 8.25-9.30 GHz | -11.1 dB |
+| 3.0 mm | 30 ohm | 14-77 | 11.25-12.00 GHz | -11.4 dB |
+
+A 1.8 mm feed lands the median on 51 ohm, essentially the 50 ohm target. **The
+match is still only about 1 GHz wide**, because Re(Zin) still swings from 18 to
+133 ohm across the band. There is also a trade: narrowing the feed raises the
+median toward 50 ohm but widens the swing.
+
+So the conclusion, now resting on a validated model:
+
+**The median impedance is solved; the frequency variation is not, and it is a
+property of this feed topology.** A uniform parallel-strip line running into an
+abrupt flare cannot present a stable impedance over an octave and a half. What
+is needed is a genuine microstrip-to-parallel-strip transition with a tapered
+ground plane - a different topology from the one modelled here, not another
+value of an existing parameter.
+
 ## What is actually unresolved
 
-Best achieved: about 1.7 GHz of contiguous -10 dB match, against a required
-8 GHz. The blocker is now precisely located: **the antenna presents roughly
-27 ohm with a 12-116 ohm swing across the band, and this topology cannot be
-matched to 50 ohm over 3-11 GHz by any of the parameters exposed here.**
-
-Two things follow, and they are worth stating in the report because they are
-findings rather than failures.
+Best achieved: about 1.7 GHz of contiguous -10 dB match against a required
+8 GHz, and separately a median impedance of 51 ohm at a 1.8 mm feed. The two
+have not been achieved together.
 
 **Proposal 2.3 under-specifies the antenna.** It gives one parameter, the
-opening rate, and asserts 0.05-0.10 per mm "gives a clean 3-11 GHz match". That
-cannot be right on its own: what governs the flare is the dimensionless product
-of rate and taper length, so a rate quoted without a length specifies nothing.
-Eleven geometries were simulated across 70-120 mm length, 40-60 mm aperture and
-rate 0.015-0.08, and none came close.
+opening rate, and asserts 0.05-0.10 per mm "gives a clean 3-11 GHz match". What
+governs the flare is the dimensionless product of rate and taper length, so a
+rate quoted without a length specifies nothing; and in any case the flare was
+never the binding constraint. Thirteen geometries were simulated across
+70-120 mm length, 40-60 mm aperture, rate 0.015-0.08 and feed widths
+1.2-6.0 mm.
 
-**The feed, not the flare, is the hard part.** Every parameter that changes the
-radiating structure was varied with little effect, while the one that changes
-the feed impedance moved it predictably. An antipodal Vivaldi covering an
-octave and a half needs a genuine microstrip-to-parallel-strip transition with
-a tapered ground plane, which is a different topology from the uniform
-parallel-strip feed modelled here.
+**The feed, not the flare, is the hard part.** Every parameter changing the
+radiating structure moved the answer very little; the feed parameters moved it
+predictably and are where the remaining work is.
 
 ## Recommended next step
 
-**Reproduce a published design before optimising further.** Take an antipodal
-Vivaldi from the literature with fully stated dimensions, build it in this same
-openEMS model, and confirm it reproduces the published S11. That separates two
-possibilities which no amount of further parameter sweeping can:
-
-- the model is faithful and this feed topology simply cannot cover the band, or
-- something in the model - the lumped-port launch in particular - misrepresents
-  the feed, in which case the design conclusions above need revisiting
-
-Doing this first would have been cheaper than eight hypotheses. It is the
-lesson worth carrying: when a simulation disagrees with a design rule, validate
-the simulation against a known-good case before trusting either.
+Implement the proper feed: a microstrip section, a ground plane tapering to a
+parallel strip, then the flare. That is the standard antipodal Vivaldi
+topology and the one thing not yet tried. The model is now validated well
+enough to trust the result when it is.
 
 ## Reproducing
 

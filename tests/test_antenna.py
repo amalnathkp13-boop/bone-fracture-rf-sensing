@@ -258,3 +258,32 @@ def test_original_design_had_a_pathological_flare_ratio():
     """Regression on the diagnosis: the first design flared far too fast."""
     assert Vivaldi().flare_ratio < 1.0
     assert Vivaldi().growth == pytest.approx(4.0)
+
+
+# --- meshing (regression) -------------------------------------------------
+
+def test_model_refines_the_metal_edges():
+    """Regression: every metal must be snapped to the grid and refined.
+
+    Omitting FDTD.AddEdges2Grid was the defect that made the Vivaldi model
+    useless. A patch has straight, axis-aligned edges and tolerates a
+    hand-placed grid; a Vivaldi is defined by two curved exponential edges and
+    does not. Verified against the openEMS Simple_Patch_Antenna tutorial, which
+    refines its edges and returns Zin = 49.7 + 4.5j ohm at resonance.
+    """
+    import inspect
+
+    from bonesim.antenna import model
+    src = inspect.getsource(model.build)
+    assert "AddEdges2Grid" in src
+    assert "metal_edge_res" in src
+
+
+def test_mesh_resolution_uses_the_highest_frequency_in_the_substrate():
+    """lambda/20 at f0+fc inside the dielectric, not in air at f0."""
+    import inspect
+
+    from bonesim.antenna import model
+    src = inspect.getsource(model.build)
+    assert "f0 + fc" in src
+    assert "eps_r" in src.split("--- mesh")[1]

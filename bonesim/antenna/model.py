@@ -111,28 +111,38 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
         "z", 1.0, priority=5, edges2grid="xy")
 
     # --- mesh ------------------------------------------------------------
-    # Substrate faces and the feed must land exactly on mesh lines; the taper
-    # is sampled so the flare edge is not stepped too coarsely.
-    x_lines = [-air, 0.0, ant.taper_start, ant.length, ant.length + air]
-    x_lines += list(np.linspace(ant.taper_start, ant.length, 12))
-    y_lines = [-ant.sub_width / 2 - air, -ant.sub_width / 2,
-               -ant.feed_width / 2, -ant.w_port / 2, 0.0,
-               ant.w_port / 2, ant.feed_width / 2,
-               ant.sub_width / 2, ant.sub_width / 2 + air]
-    y_lines += list(np.linspace(-ant.aperture / 2, ant.aperture / 2, 9))
-    # The port integrates E across the substrate and H around the strip, so it
-    # needs several cells through the thickness, not the bare minimum of three.
-    z_lines = [-air] + list(np.linspace(0.0, h, sub_cells + 1)) + [h + air]
-    # Refine in-plane around the port as well, for the same reason.
-    x_lines += list(np.linspace(0.0, 3.0, 4))
-    y_lines += list(np.linspace(-ant.feed_width, ant.feed_width, 9))
+    # Resolution from the HIGHEST frequency in the excitation, and inside the
+    # substrate, where the wavelength is shortest.
+    f_max = f0 + fc
+    lam_min = C0 / (f_max * np.sqrt(sub["eps_r"])) * 1e3      # mm
+    mesh_res = min(max_res_air, lam_min / 20.0)
 
+    # Substrate faces, the feed, and the domain extent.
+    x_lines = [-air, 0.0, ant.taper_start, ant.length, ant.length + air]
+    y_lines = [-ant.sub_width / 2 - air, -ant.sub_width / 2, -hw, 0.0, hw,
+               ant.sub_width / 2, ant.sub_width / 2 + air]
+    z_lines = ([-air] + list(np.linspace(0.0, h, sub_cells + 1)) + [h + air])
     mesh.AddLine("x", x_lines)
     mesh.AddLine("y", y_lines)
     mesh.AddLine("z", z_lines)
-    mesh.SmoothMeshLines("x", max_res_air)
-    mesh.SmoothMeshLines("y", max_res_air)
-    mesh.SmoothMeshLines("z", max_res_air)
+
+    # Snap the grid to every metal edge and refine there, by the thirds rule.
+    #
+    # This is what the openEMS tutorials do for any printed antenna and its
+    # omission was the defect that made this model useless. A patch has
+    # straight, axis-aligned edges and survives a hand-placed grid; a Vivaldi
+    # is *defined* by two curved exponential edges, and near the feed the gap
+    # between them passes through zero over a few millimetres. Staircased onto
+    # a uniform 1.2 mm grid, that transition is represented by two or three
+    # cells and the launch is meaningless - which is exactly what the measured
+    # input impedance showed (27 ohm median, swinging 12 to 116 ohm, against
+    # 49.7 ohm for the tutorial patch that does refine its edges).
+    for prop in (top, bot):
+        fdtd.AddEdges2Grid(dirs="xy", properties=prop,
+                           metal_edge_res=mesh_res / 2)
+
+    # Graded smoothing, ratio-limited so cell size never jumps abruptly.
+    mesh.SmoothMeshLines("all", mesh_res, 1.4)
 
     nf2ff = None
     if nf2ff_freqs is not None:
