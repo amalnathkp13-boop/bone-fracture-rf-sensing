@@ -90,7 +90,7 @@ seconds and only then spend FDTD hours on it.
 | 2 | Analytic forward model + full processing chain | **complete** |
 | 3 | gprMax geometry builder and B-scan driver | **complete** |
 | 4 | Brass-rod validation gate (proposal Â§9) | not started |
-| 5 | Antipodal Vivaldi characterisation in openEMS (install deferred to here) | not started |
+| 5 | Antipodal Vivaldi characterisation in openEMS | **partial** — see `docs/stage5-findings.md` |
 | 6 | Experiment matrix, 192 B-scans | not started |
 | 7 | Statistical analysis and figure generation | not started |
 
