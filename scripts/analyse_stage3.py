@@ -26,7 +26,9 @@ import numpy as np
 from bonesim.forward.base import ScanData
 from bonesim.perturb.errors import Instrument
 from bonesim.process.autofocus import autofocus
-from bonesim.process.clutter import remove_clutter_svd, subtract_empty_scene
+from bonesim.process.clutter import (remove_clutter_selective,
+                                     remove_clutter_svd,
+                                     subtract_empty_scene)
 from bonesim.process.migrate import migrate
 from bonesim.detect.metrics import detect_snr, estimate_sample_noise
 
@@ -59,7 +61,7 @@ def main() -> int:
     for name, d in (("fractured", fr), ("intact", it)):
         clean = remove_clutter_svd(inst.apply_post(
             subtract_empty_scene(d, ref)), k=1)
-        r = autofocus(clean, 4.0, 20.0, n_coarse=17)
+        r = autofocus(clean, 4.0, 45.0, n_coarse=17)
         lo, hi = r.sensitivity()
         det = detect_snr(r.image, clean)
         results[name] = (r, det, clean)
@@ -67,14 +69,42 @@ def main() -> int:
               f"(flat within 2% over {lo:.1f}-{hi:.1f})   "
               f"peak x {det.x_peak*1e3:5.1f} mm  z {det.z_peak*1e3:5.1f} mm  "
               f"SNR {det.ratio_db:5.1f} dB")
-    print(f"  true fracture x = {X_FRAC*1e3:.1f} mm, "
-          f"cortex surface z = {Z_CORTEX*1e3:.1f} mm")
+    print(f"  true fracture x = {X_FRAC*1e3:.1f} mm; the gap spans the whole "
+          f"cortical wall,")
+    print(f"  z = 6.0 to 10.0 mm, so its scattering centroid is 8.0 mm - not "
+          f"the 6.0 mm surface")
+    eps = results["fractured"][0].eps_avg
 
     print()
     print("=" * 74)
-    print("3. Sensitivity to k, at the autofocused eps_avg")
+    print("3. Clutter removal: the index rule against selection by character")
     print("=" * 74)
-    eps = results["fractured"][0].eps_avg
+    print(f"  {'method':<26}{'frac':>8}{'intact':>9}{'separation':>12}"
+          f"{'x err':>8}{'z mm':>8}")
+    for label, k, margin in (("k=1, no margin", 1, 0.0),
+                             ("k=1, 10 mm margin", 1, 0.010),
+                             ("selective, 10 mm margin", None, 0.010)):
+        if k is not None:
+            cf = remove_clutter_svd(inst.apply_post(
+                subtract_empty_scene(fr, ref)), k=k)
+            ci = remove_clutter_svd(inst.apply_post(
+                subtract_empty_scene(it, ref)), k=k)
+        else:
+            cf = remove_clutter_selective(inst.apply_post(
+                subtract_empty_scene(fr, ref)), eps)[0]
+            ci = remove_clutter_selective(inst.apply_post(
+                subtract_empty_scene(it, ref)), eps)[0]
+        a = detect_snr(migrate(cf, eps), cf, x_margin=margin)
+        b = detect_snr(migrate(ci, eps), ci, x_margin=margin)
+        print(f"  {label:<26}{a.ratio_db:>8.1f}{b.ratio_db:>9.1f}"
+              f"{a.ratio_db-b.ratio_db:>12.1f}"
+              f"{abs(a.x_peak-X_FRAC)*1e3:>8.1f}{a.z_peak*1e3:>8.1f}")
+    print(f"  true: x = {X_FRAC*1e3:.0f} mm, gap spans z = 6.0 to 10.0 mm")
+
+    print()
+    print("=" * 74)
+    print("4. Sensitivity to k, at the autofocused eps_avg")
+    print("=" * 74)
     print(f"  {'k':>3}{'frac x mm':>11}{'err mm':>9}{'frac SNR':>11}"
           f"{'intact SNR':>12}{'separation':>12}")
     for k in (1, 2, 3, 4):
@@ -92,7 +122,7 @@ def main() -> int:
 
     print()
     print("=" * 74)
-    print("4. Does the detector respond to target strength?")
+    print("5. Does the detector respond to target strength?")
     print("=" * 74)
     print("  (a ratio detector that ignores kerf is not a detector)")
     r, det, clean = results["fractured"]

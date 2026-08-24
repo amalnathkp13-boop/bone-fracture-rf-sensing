@@ -146,3 +146,43 @@ Measured, and it revises the earlier estimate upward:
 | full matrix, 192 B-scans | **32.5 h** |
 
 See `docs/colab.md` for whether to move that to a hosted GPU.
+
+
+---
+
+## Re-verified after Stages 4 and 5
+
+The numbers above were recorded before three later improvements. Re-running
+`scripts/analyse_stage3.py` against the same saved scans with the current
+pipeline changes the result materially, and in every case for the better.
+
+**Autofocus now finds a real optimum.** With the focus metric restricted to a
+fixed depth window and the search widened to 45, it returns eps_avg = 26.4 as an
+interior minimum rather than railing against a bound at 20.0.
+
+**Depth is now inside the fracture.** The recovered depth is 7.4 mm. The gap
+spans the whole cortical wall from 6.0 to 10.0 mm, so its scattering centroid is
+at 8.0 mm - the first pass compared against the 6.0 mm cortex *surface*, which
+was the wrong reference and made the error look worse than it was.
+
+**Selective clutter removal helps here too**, and by more than the edge margin:
+
+| method | fractured | intact | separation | x error | depth |
+|---|---|---|---|---|---|
+| k=1, no margin | 89.7 dB | 37.5 | 52.2 dB | 0.2 mm | 7.4 mm |
+| k=1, 10 mm margin | 89.7 | 37.4 | 52.3 | 0.2 | 7.4 |
+| **selective, 10 mm margin** | **90.4** | **20.7** | **69.7 dB** | **0.2** | **7.4** |
+
+The intact control falls from 37.5 dB to 20.7 dB. Unlike the Stage 4 phantom
+tank, the edge margin barely matters for the limb geometry - it has no flat
+floor generating a strong edge artefact - so essentially all of the gain here
+comes from selecting components by character rather than by index.
+
+**Everything else stands.** k = 1 is still required; k = 2 mislocalises by
+10.7 mm, k = 3 by 15.1 mm. Lateral error is still 0.2 mm. The detector still
+responds to target strength, with a fractured-to-intact peak ratio of 356x.
+
+Current headline for Stage 3: a 1 mm fracture under 6 mm of overlay, localised
+to **0.2 mm laterally and inside the 4 mm gap in depth**, with **69.7 dB** of
+separation from an intact limb, on full-wave data the reconstructor knows
+nothing about.
