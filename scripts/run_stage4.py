@@ -35,7 +35,9 @@ from bonesim.forward.gprmax import GridSpec
 from bonesim.geometry.validation import RodPhantom
 from bonesim.perturb.errors import Instrument
 from bonesim.process.autofocus import autofocus
-from bonesim.process.clutter import remove_clutter_svd, subtract_empty_scene
+from bonesim.process.clutter import (remove_clutter_selective,
+                                     remove_clutter_svd,
+                                     subtract_empty_scene)
 
 RUNS = Path(__file__).resolve().parent.parent / "runs"
 ROD_X = 0.050
@@ -62,15 +64,23 @@ def acquire(phantom, tag, plan):
     return d
 
 
-def reconstruct(data, k=1, eps=None):
+X_MARGIN = 0.010     # excluded at each end of the scan; see detect_snr
+
+
+def reconstruct(data, k=None, eps=None):
+    """k=None selects components by character; an integer uses the old rule."""
+    from bonesim.process.migrate import migrate
+
     inst = Instrument()
     ref = ScanData(data.f, data.x, np.ones_like(data.s11), data.z_antenna, {})
-    clean = remove_clutter_svd(
-        inst.apply_post(subtract_empty_scene(data, ref)), k=k)
+    d = inst.apply_post(subtract_empty_scene(data, ref))
     if eps is None:
-        r = autofocus(clean, 4.0, 45.0, n_coarse=21)
-        return r.image, clean, r.eps_avg
-    from bonesim.process.migrate import migrate
+        # Autofocus needs a cleaned matrix, and selective removal needs a
+        # permittivity, so break the loop with the index rule for focusing only.
+        r = autofocus(remove_clutter_svd(d, k=1), 4.0, 45.0, n_coarse=21)
+        eps = r.eps_avg
+    clean = (remove_clutter_svd(d, k=k) if k is not None
+             else remove_clutter_selective(d, eps)[0])
     return migrate(clean, eps), clean, eps
 
 
@@ -94,9 +104,11 @@ def main() -> int:
     print("1. The gate: a 6 mm rod at 20 mm depth")
     print("=" * 76)
     img, clean, eps = reconstruct(scans["rod20"])
-    det = detect_snr(img, clean, z_window=(0.005, 0.035))
+    det = detect_snr(img, clean, z_window=(0.005, 0.035),
+                     x_margin=X_MARGIN)
     img0, clean0, _ = reconstruct(scans["norod"], eps=eps)
-    det0 = detect_snr(img0, clean0, z_window=(0.005, 0.035))
+    det0 = detect_snr(img0, clean0, z_window=(0.005, 0.035),
+                      x_margin=X_MARGIN)
 
     x_err = abs(det.x_peak - ROD_X) * 1e3
     z_err = abs(det.z_peak - rod.rod_depth) * 1e3
@@ -119,7 +131,8 @@ def main() -> int:
     print(f"  {'k':>3}{'x mm':>9}{'x err':>8}{'z mm':>9}{'z err':>8}{'SNR dB':>9}")
     for k in (1, 2, 3):
         im, cl, _ = reconstruct(scans["rod20"], k=k, eps=eps)
-        d = detect_snr(im, cl, z_window=(0.005, 0.035))
+        d = detect_snr(im, cl, z_window=(0.005, 0.035),
+                       x_margin=X_MARGIN)
         print(f"  {k:>3}{d.x_peak*1e3:>9.1f}{abs(d.x_peak-ROD_X)*1e3:>8.1f}"
               f"{d.z_peak*1e3:>9.1f}{abs(d.z_peak-rod.rod_depth)*1e3:>8.1f}"
               f"{d.ratio_db:>9.1f}")
@@ -132,7 +145,8 @@ def main() -> int:
           f"{'SNR dB':>9}{'eps_avg':>9}")
     for tag, z_true in (("rod12", 0.012), ("rod20", 0.020), ("rod28", 0.028)):
         im, cl, e = reconstruct(scans[tag])
-        d = detect_snr(im, cl, z_window=(0.005, 0.035))
+        d = detect_snr(im, cl, z_window=(0.005, 0.035),
+                       x_margin=X_MARGIN)
         print(f"  {z_true*1e3:>7.0f} {d.z_peak*1e3:>9.1f}"
               f"{abs(d.z_peak-z_true)*1e3:>8.1f}"
               f"{abs(d.x_peak-ROD_X)*1e3:>8.1f}{d.ratio_db:>9.1f}{e:>9.1f}")

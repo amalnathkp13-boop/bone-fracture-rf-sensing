@@ -108,8 +108,8 @@ def estimate_sample_noise(data) -> float:
     return bulk / ((np.sqrt(m) + np.sqrt(n)) / 2)
 
 
-def detect_snr(img: Image, data, z_window: tuple[float, float] = (0.003, 0.020)
-               ) -> Detection:
+def detect_snr(img: Image, data, z_window: tuple[float, float] = (0.003, 0.020),
+               x_margin: float = 0.010) -> Detection:
     """Peak-to-noise ratio: the detector this project actually uses.
 
     Peak-to-background *within one image* was tried first, following section 2.5
@@ -132,13 +132,26 @@ def detect_snr(img: Image, data, z_window: tuple[float, float] = (0.003, 0.020)
     rows = (img.z >= z_window[0]) & (img.z <= z_window[1])
     if not rows.any():
         raise ValueError(f"depth window {z_window} is empty for this grid")
-    roi = env[rows]
+
+    # Exclude a margin at each end of the scan.
+    #
+    # Migration can only focus a pixel that has scan positions on both sides of
+    # it; at the ends of the aperture the sum is one-sided and unfocused energy
+    # piles up. In the Stage 4 target-free control this artefact *was* the
+    # residual: it peaked at exactly x = 20.0 mm, the first scan position, and
+    # the lateral profile was a U - 0 dB at both ends against -18.5 dB in the
+    # middle. It is not clutter and no amount of SVD filtering removes it.
+    cols = ((img.x >= img.x[0] + x_margin) & (img.x <= img.x[-1] - x_margin))
+    if not cols.any():
+        raise ValueError(f"x_margin {x_margin} leaves no image to search")
+    roi = env[np.ix_(rows, cols)]
+    x_roi = img.x[cols]
     iz, ix = np.unravel_index(int(np.argmax(roi)), roi.shape)
     peak = float(roi[iz, ix])
 
     sigma = estimate_sample_noise(data)
     floor = sigma * np.sqrt(data.n_freq * data.n_scan)
     ratio = 20 * np.log10(peak / floor) if floor > 0 else np.inf
-    return Detection(ratio, float(img.x[ix]), float(img.z[rows][iz]),
+    return Detection(ratio, float(x_roi[ix]), float(img.z[rows][iz]),
                      float(img.z[rows][iz]),
                      20 * np.log10(floor) if floor > 0 else -np.inf)

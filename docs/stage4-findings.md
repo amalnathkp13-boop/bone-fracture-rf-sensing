@@ -93,13 +93,78 @@ This is the most robust result the project has produced, and it is the one worth
 leading with: *is there a fracture, and where along the bone* is answerable
 reliably. *How deep* is not, unless the target is strong.
 
-## Caveat
+## The dirty control, and what it turned out to be
 
-The no-rod control scores 51.4 dB, not the noise floor. Residual clutter
-survives the SVD - the phantom tank has a flat bottom at 36 mm as well as its
-surface, and one rank does not remove both. The 19.2 dB separation is real and
-the gate passes, but the control is not clean, and the same will be true of any
-ROC analysis built on this detector. Worth revisiting before Stage 7.
+The first pass left this open: the no-rod control scored 51.4 dB rather than
+the noise floor, so the detector had a dirty reference and any ROC analysis
+would inherit it. Two separate causes, both now fixed.
+
+### Cause 1: clutter and signal are interleaved in the singular spectrum
+
+Proposal 2.5 says to discard the leading K components. That rule assumes
+clutter occupies the strongest components and signal everything after. Migrating
+each component alone shows it is false here:
+
+| component | lateral extent | what it is |
+|---|---|---|
+| 0 | 57 mm | tank surface |
+| **1** | **13 mm** | **the rod** |
+| 2 | 22 mm | mixed |
+| 3 | 39 mm | tank floor |
+
+The phantom tank has two flat interfaces and **the target sits between them**.
+So k=1 leaves the floor in, and k=2 removes the rod. No value of k works, which
+is why the control never reached the floor and why the earlier k sweeps all
+looked bad.
+
+`remove_clutter_selective` migrates each component alone and discards those
+spanning more than half the aperture, keeping compact ones whatever their
+index. Separation improves from 15.7 dB to 18.1 dB with localisation unchanged.
+
+Note what does *not* work: discriminating on the raw right singular vectors.
+A target is *seen* from many scan positions even though it occupies one, so its
+singular vector is not localised either - measured participation ratios were
+0.70 of full for the target against 0.64 for an interface. The discrimination
+has to happen in the image, after migration.
+
+### Cause 2: the residual was a migration edge artefact
+
+What remained in the control was not clutter at all. It peaked at exactly
+x = 20.0 mm - the first scan position - with a U-shaped lateral profile:
+
+| x (mm) | 20.0 | 34.9 | 49.8 | 64.6 | 79.5 |
+|---|---|---|---|---|---|
+| level | **0.0 dB** | -14.3 | -13.2 | -18.5 | **-0.2 dB** |
+
+Migration can only focus a pixel with scan positions on both sides of it. At
+the ends of the aperture the sum is one-sided and unfocused energy piles up. No
+amount of SVD filtering removes this; excluding a margin does.
+
+`detect_snr` now takes `x_margin`, default 10 mm:
+
+| margin | rod SNR | control SNR | separation |
+|---|---|---|---|
+| 0 mm | 72.7 | 54.6 | 18.1 dB |
+| 5 mm | 72.7 | 49.3 | 23.4 |
+| **10 mm** | **72.7** | **49.0** | **23.6** |
+| 15 mm | 72.7 | 42.9 | 29.7 |
+
+The rod score is identical at every margin - it sits at mid-aperture - so this
+is pure artefact removal, not a trade against signal. It does cost usable scan
+length: a 10 mm margin leaves 40 of 60 mm. A wider margin keeps improving the
+separation, and is worth taking if the scan can afford the length.
+
+### Result
+
+Both fixes together: **separation 19.2 dB to 22.6 dB**, control 51.4 dB to
+48.8 dB, localisation unchanged at 0.2 mm lateral and 1.0 mm in depth.
+
+The control still sits above the noise floor. What is left is genuine residual
+structure, not artefact, and it matters less than it appears: ROC needs the two
+classes to separate, which they do by 22.6 dB, and a systematic offset common to
+all acquisitions moves the threshold rather than degrading the curve. It should
+still be watched in Stage 7, because an offset that *varies* between specimens
+would add variance to the AUC.
 
 ## Operational note: the laptop slept
 

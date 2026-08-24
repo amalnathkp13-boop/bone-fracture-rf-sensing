@@ -86,11 +86,11 @@ seconds and only then spend FDTD hours on it.
 | Stage | Description | State |
 |---|---|---|
 | 0 | WSL2 environment, gprMax, compute benchmark | **complete** |
-| 1 | Cole-Cole → Debye fitting, validated against published curves | not started |
+| 1 | Cole-Cole → Debye fitting, validated against published curves | **complete** |
 | 2 | Analytic forward model + full processing chain | **complete** |
 | 3 | gprMax geometry builder and B-scan driver | **complete** |
-| 4 | Brass-rod validation gate (proposal §9) | not started |
-| 5 | Antipodal Vivaldi characterisation in openEMS | **partial** � see `docs/stage5-findings.md` |
+| 4 | Brass-rod validation gate (proposal §9) | **complete** |
+| 5 | Antipodal Vivaldi characterisation in openEMS | **partial** — see `docs/stage5-findings.md` |
 | 6 | Experiment matrix, 192 B-scans | not started |
 | 7 | Statistical analysis and figure generation | not started |
 

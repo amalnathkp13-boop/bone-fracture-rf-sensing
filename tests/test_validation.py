@@ -98,3 +98,129 @@ def test_layered_phantom_still_emits_no_cylinders():
     text = build_geometry(Phantom().with_fracture(Fracture(0.05, 0.001)),
                           GridSpec())
     assert "#cylinder:" not in text
+
+
+# --- clutter removal by character, not index -------------------------------
+
+def _synthetic_scan(n_freq=64, n_scan=41, eps=12.0):
+    """A flat interface, a point scatterer, and a second flat interface.
+
+    Deliberately ordered so the target sits *between* the two interfaces in
+    singular value, which is the situation the index rule cannot handle and
+    which the Stage 4 phantom tank actually produced.
+
+    The target must carry proper hyperbolic moveout - its delay varying with
+    scan position - because that is what migration collapses to a point. An
+    earlier version of this helper used a constant delay under a Gaussian
+    amplitude envelope; that never focuses, so every component looked extended
+    and the test failed on the fixture rather than on the code.
+    """
+    import numpy as np
+
+    from bonesim.forward.base import ScanData
+    C0 = 299_792_458.0
+    f = np.linspace(3e9, 11e9, n_freq)
+    x = np.linspace(0.020, 0.080, n_scan)
+    z_ant = -0.012
+    rng = np.random.default_rng(0)
+
+    def flat(amp, delay):
+        return amp * np.exp(-2j * np.pi * np.outer(f, np.full(n_scan, delay)))
+
+    # Point scatterer at (50 mm, 20 mm), with the air/tissue path split the
+    # reconstructor also assumes.
+    x0, z0, n = 0.050, 0.020, np.sqrt(eps)
+    r = np.hypot(x - x0, z0 - z_ant)
+    r_air = r * ((-z_ant) / (z0 - z_ant))
+    delay = 2.0 * (r_air + n * (r - r_air)) / C0
+    tgt = 0.05 * np.exp(-2j * np.pi * np.outer(f, delay))
+
+    s11 = flat(1.0, 1e-10) + tgt + flat(0.2, 8e-10)
+    s11 = s11 + 1e-6 * (rng.normal(size=s11.shape)
+                        + 1j * rng.normal(size=s11.shape))
+    return ScanData(f, x, s11, z_ant, {})
+
+
+def test_component_extents_separates_flat_from_compact():
+    import numpy as np
+
+    from bonesim.process.clutter import component_extents
+    data = _synthetic_scan()
+    ext, s = component_extents(data, 12.0, n_components=4)
+    aperture = float(data.x[-1] - data.x[0])
+    # At least one component spans most of the aperture and at least one does
+    # not; that separation is the whole basis of the method.
+    assert ext.max() > 0.5 * aperture
+    assert ext.min() < 0.5 * aperture
+
+
+def test_selective_removal_keeps_the_compact_component():
+    from bonesim.process.clutter import remove_clutter_selective
+    data = _synthetic_scan()
+    cleaned, keep, ext = remove_clutter_selective(data, 12.0, n_components=4)
+    assert keep, "everything was discarded"
+    aperture = float(data.x[-1] - data.x[0])
+    for i in keep:
+        assert ext[i] <= 0.5 * aperture
+
+
+def test_selective_removal_preserves_matrix_shape():
+    from bonesim.process.clutter import remove_clutter_selective
+    data = _synthetic_scan()
+    cleaned, _, _ = remove_clutter_selective(data, 12.0, n_components=4)
+    assert cleaned.s11.shape == data.s11.shape
+    assert cleaned.meta["svd_selective"] is True
+
+
+# --- migration edge artefact ----------------------------------------------
+
+def test_detect_snr_excludes_the_aperture_edges():
+    """Regression: the Stage 4 control residual was a migration edge artefact.
+
+    It peaked at exactly the first scan position, with a U-shaped lateral
+    profile - 0 dB at both ends against -18.5 dB in the middle - because
+    migration cannot focus where the aperture is one-sided. No SVD filtering
+    removes it; excluding a margin does.
+    """
+    import numpy as np
+    import pytest as _pytest
+
+    from bonesim.detect.metrics import detect_snr
+    from bonesim.forward.base import ScanData
+    from bonesim.process.migrate import Image
+
+    x = np.linspace(0.020, 0.080, 61)
+    z = np.linspace(0.0, 0.030, 31)
+    env = np.full((z.size, x.size), 0.01)
+    env[:, 0] = 1.0                      # artefact hard against the left edge
+    env[15, 30] = 0.5                    # a genuine target mid-aperture
+    img = Image(x, z, env.astype(complex), 12.0)
+    rng = np.random.default_rng(1)
+    data = ScanData(np.linspace(3e9, 11e9, 32), x,
+                    1e-6 * (rng.normal(size=(32, 61))
+                            + 1j * rng.normal(size=(32, 61))), -0.012, {})
+
+    edge = detect_snr(img, data, z_window=(0.005, 0.025), x_margin=0.0)
+    inner = detect_snr(img, data, z_window=(0.005, 0.025), x_margin=0.010)
+    assert edge.x_peak == _pytest.approx(0.020)      # finds the artefact
+    assert inner.x_peak == _pytest.approx(0.050, abs=1e-3)   # finds the target
+    assert inner.ratio_db < edge.ratio_db
+
+
+def test_detect_snr_rejects_a_margin_that_consumes_the_image():
+    import numpy as np
+    import pytest as _pytest
+
+    from bonesim.detect.metrics import detect_snr
+    from bonesim.forward.base import ScanData
+    from bonesim.process.migrate import Image
+
+    x = np.linspace(0.020, 0.080, 61)
+    z = np.linspace(0.0, 0.030, 31)
+    img = Image(x, z, np.ones((31, 61), complex), 12.0)
+    rng = np.random.default_rng(1)
+    data = ScanData(np.linspace(3e9, 11e9, 32), x,
+                    1e-6 * (rng.normal(size=(32, 61))
+                            + 1j * rng.normal(size=(32, 61))), -0.012, {})
+    with _pytest.raises(ValueError, match="leaves no image"):
+        detect_snr(img, data, z_window=(0.005, 0.025), x_margin=0.050)
