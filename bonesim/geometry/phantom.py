@@ -88,17 +88,36 @@ class Phantom:
     def with_overlay(self, total: float) -> "Phantom":
         """Rescale the soft-tissue layers to a given total overlay thickness.
 
-        Skin is held at its physiological thickness and the remainder is split
-        between fat and muscle in their existing proportion, because it is
-        subcutaneous fat that actually varies between sites and subjects.
+        Above skin thickness, skin is held at its physiological value and the
+        remainder is split between fat and muscle in their existing proportion,
+        because it is subcutaneous fat that actually varies between sites and
+        subjects.
+
+        At or below skin thickness the whole stack is scaled down together.
+        total = 0 gives bare bone, which the experiment matrix of proposal 4.4
+        requires as its first overlay level: specimens are scanned defleshed
+        before any phantom is cast around them.
         """
+        if total < 0:
+            raise ValueError(f"overlay cannot be negative, got {total}")
+        if total == 0.0:
+            return Phantom(**{**self.__dict__,
+                              "skin": 0.0, "fat": 0.0, "muscle": 0.0})
         if total < self.skin:
-            raise ValueError(f"overlay {total*1e3:g} mm is thinner than skin "
-                             f"{self.skin*1e3:g} mm")
+            # Thinner than skin alone: shrink all three in proportion.
+            scale = total / self.overlay
+            return Phantom(**{**self.__dict__,
+                              "skin": self.skin * scale,
+                              "fat": self.fat * scale,
+                              "muscle": self.muscle * scale})
         rest = total - self.skin
         frac = self.fat / (self.fat + self.muscle)
         return Phantom(**{**self.__dict__,
                           "fat": rest * frac, "muscle": rest * (1 - frac)})
+
+    @property
+    def is_bare(self) -> bool:
+        return self.overlay == 0.0
 
     def with_fracture(self, fracture: Fracture | None) -> "Phantom":
         return Phantom(**{**self.__dict__, "fracture": fracture})
@@ -106,8 +125,15 @@ class Phantom:
     # --- description of the stack -----------------------------------------
 
     def stack(self) -> list[tuple[str, float, float]]:
-        """(material, z_top, z_bottom) from the skin surface inward."""
-        return [
+        """(material, z_top, z_bottom) from the skin surface inward.
+
+        Layers of zero thickness are omitted. A layer that is not there should
+        not be emitted, and a degenerate box is not merely redundant: gprMax
+        rejects a primitive with no volume, so a bare-bone specimen - overlay
+        zero, the first level of the matrix in proposal 4.4 - would otherwise
+        fail to build at all.
+        """
+        layers = [
             ("skin_dry", self.z_skin, self.z_fat),
             ("fat", self.z_fat, self.z_muscle),
             ("muscle", self.z_muscle, self.z_cortex),
@@ -116,6 +142,7 @@ class Phantom:
             (self.bone_material, self.z_far_cortex,
              self.z_far_cortex + self.cortex),
         ]
+        return [(m, a, b) for m, a, b in layers if b > a]
 
     def material_at(self, x: float, z: float) -> str:
         """Material at a point, accounting for the fracture gap."""

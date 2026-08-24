@@ -57,7 +57,7 @@ def run_bscan(phantom, work_dir, plan: BScanPlan | None = None,
               grid: GridSpec | None = None, materials=None,
               n_proc: int = 4, threads: int = 4, clean: bool = False,
               resume: bool = True, timeout: float = 86400,
-              wsl_distro="Ubuntu") -> ScanData:
+              wsl_distro="Ubuntu", gpu: bool = False) -> ScanData:
     """Generate, run and assemble one B-scan.
 
     The free-space reference is run alongside the scan chunks. It is a single
@@ -112,7 +112,7 @@ def run_bscan(phantom, work_dir, plan: BScanPlan | None = None,
               f"outputs present, skipping solve")
     else:
         run_models(work, decks, threads=threads, wsl_distro=wsl_distro,
-                   timeout=timeout)
+                   timeout=timeout, gpu=gpu)
 
     z_ant = -(phantom.standoff if phantom is not None else 0.0)
     return assemble(work, stems, "ref", plan.f, x, z_ant,

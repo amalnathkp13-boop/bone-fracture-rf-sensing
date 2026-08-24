@@ -35,9 +35,31 @@ def test_overlay_rescaling_preserves_skin():
     assert p.skin == Phantom().skin       # skin is physiological, not padding
 
 
-def test_overlay_below_skin_rejected():
-    with pytest.raises(ValueError, match="thinner than skin"):
-        Phantom().with_overlay(0.001)
+def test_overlay_below_skin_scales_the_whole_stack():
+    """Thinner than skin used to raise. It now scales all three layers down.
+
+    The change was needed for the experiment matrix: proposal 4.4 makes bare
+    bone, overlay zero, the first of its four overlay levels, and refusing
+    anything below skin thickness made that level impossible to express.
+    """
+    p = Phantom().with_overlay(0.001)
+    assert p.overlay == pytest.approx(0.001)
+    assert p.skin > 0 and p.fat > 0 and p.muscle > 0
+    # Proportions preserved.
+    base = Phantom()
+    assert p.skin / p.overlay == pytest.approx(base.skin / base.overlay)
+
+
+def test_overlay_zero_gives_bare_bone():
+    p = Phantom().with_overlay(0.0)
+    assert p.is_bare
+    assert p.skin == 0.0 and p.fat == 0.0 and p.muscle == 0.0
+    assert p.z_cortex == 0.0
+
+
+def test_negative_overlay_still_rejected():
+    with pytest.raises(ValueError, match="cannot be negative"):
+        Phantom().with_overlay(-0.001)
 
 
 def test_fracture_sits_on_the_cortex():

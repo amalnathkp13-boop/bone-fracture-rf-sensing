@@ -204,7 +204,8 @@ def assemble(work, stems, reference_stem: str, f_out, x, z_antenna,
 
 
 def run_models(work, decks, threads: int = 4, wsl_distro="Ubuntu",
-               conda_env: str = "bonesim", timeout: float = 86400) -> None:
+               conda_env: str = "bonesim", timeout: float = 86400,
+               gpu: bool = False) -> None:
     """Run gprMax decks concurrently.
 
     Four processes of four threads each, never one process across sixteen: the
@@ -214,14 +215,21 @@ def run_models(work, decks, threads: int = 4, wsl_distro="Ubuntu",
     posix = Path(work).as_posix()
     if wsl_distro and len(posix) > 2 and posix[1] == ":":
         posix = f"/mnt/{posix[0].lower()}{posix[2:]}"
-    runs = " & ".join(f"python -m gprMax {stem}.in -n {n} > {stem}.log 2>&1"
-                      for stem, n in decks)
+    # On a GPU the decks run one after another, not concurrently: there is a
+    # single device and several processes would simply contend for it. The
+    # process-parallel trick that wins on CPU is a memory-bandwidth argument
+    # and does not carry over.
+    flag = " -gpu" if gpu else ""
+    joiner = "; " if gpu else " & "
+    runs = joiner.join(
+        f"python -m gprMax {stem}.in -n {n}{flag} > {stem}.log 2>&1"
+        for stem, n in decks)
     inner = "; ".join([
         "source ~/miniforge3/etc/profile.d/conda.sh",
         f"conda activate {conda_env}",
         f"cd {posix}",
         f"export OMP_NUM_THREADS={threads}",
-        runs + " & wait",
+        runs + ("" if gpu else " & wait"),
     ])
     cmd = (["wsl", "-d", wsl_distro, "--", "bash", "-lc", inner]
            if wsl_distro else ["bash", "-lc", inner])
