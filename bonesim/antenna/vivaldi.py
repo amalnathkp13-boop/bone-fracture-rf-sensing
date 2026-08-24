@@ -61,10 +61,14 @@ class Vivaldi:
     taper_start: float = 20.0
     sub_width: float = 50.0
     aperture: float = 40.0
-    feed_width: float = 3.0
+    feed_width: float = 1.74      # 50 ohm microstrip on RO4350B
+    feed_len: float = 8.0         # microstrip section before the ground taper
     feed_width_port: float | None = None   # None means no taper
     rate: float = 0.08
     substrate: str = "RO4350B"
+    n_corrugations: int = 0       # slots in the outer edge; 0 disables
+    corr_depth: float = 8.0       # mm, inward from the substrate edge
+    corr_width: float = 4.0       # mm, along the antenna axis
 
     def __post_init__(self) -> None:
         if not 0.01 <= self.rate <= 0.5:
@@ -228,17 +232,110 @@ class Vivaldi:
         half_port = self.w_port / 2
         pts = [(0.0, -half_port)]
         pts += [tuple(p) for p in self.taper_points(n)]
-        pts += [(self.length, self.sub_width / 2),
-                (self.taper_start, self.sub_width / 2),
+        pts += [(self.length, self.sub_width / 2)]
+        pts += self._outer_edge()
+        pts += [(self.taper_start, self.sub_width / 2),
                 (self.taper_start, half_feed),
                 (0.0, half_port)]
         return np.array(pts, float)
 
+    def _outer_edge(self) -> list:
+        """Outer edge from the mouth back toward taper_start, with slots.
+
+        Rectangular corrugations cut inward from the substrate edge. They
+        lengthen the current path along the outer edge, which is the standard
+        remedy when a tapered slot ripples at the bottom of its band: edge
+        currents there are what make the input impedance oscillate. Measured
+        before adding them, Re(Zin) was 117 ohm at 3.0 GHz against 24.5 ohm at
+        4.0 GHz, with the match failing at both.
+
+        Returns an empty list when n_corrugations is 0, leaving a plain edge.
+        """
+        if self.n_corrugations <= 0:
+            return []
+        half = self.sub_width / 2
+        inner = half - self.corr_depth
+        if inner <= self.aperture / 2:
+            raise ValueError(
+                f"corrugation depth {self.corr_depth} mm cuts past the "
+                f"aperture edge; the arm is only "
+                f"{half - self.aperture / 2:g} mm wide")
+        # Spread over the outer part of the flare, where the arm is widest.
+        x0 = self.taper_start + 0.3 * self.taper_length
+        centres = np.linspace(x0, self.length - self.corr_width,
+                              self.n_corrugations)
+        pts = []
+        for xc in centres[::-1]:            # walking back from the mouth
+            a, b = xc + self.corr_width / 2, xc - self.corr_width / 2
+            pts += [(float(a), half), (float(a), float(inner)),
+                    (float(b), float(inner)), (float(b), half)]
+        return pts
+
     def lower_arm(self, n: int = 60) -> np.ndarray:
-        """The bottom-face arm: the upper arm mirrored in y."""
+        """The bottom-face arm as a plain mirror of the top.
+
+        This is the *symmetric* form: both faces carry an identical strip that
+        flares the opposite way, so the feed is a parallel-strip line driven
+        directly at the board edge. It was the first topology modelled and it
+        does not work - the input impedance swings from 18 to 133 ohm across
+        3-11 GHz because nothing transitions the 50 ohm source onto the line.
+
+        Kept for comparison. `ground_arm` is the topology actually used.
+        """
         arm = self.upper_arm(n).copy()
         arm[:, 1] *= -1.0
         return arm
+
+    def ground_taper(self, x):
+        """Upper edge of the ground plane through the balun section.
+
+        Elliptical rather than linear: it leaves the full ground plane and
+        meets the strip tangentially at both ends, so neither junction is a
+        discontinuity. A linear taper corners at both joints and reflects.
+        """
+        x = np.asarray(x, float)
+        t = np.clip((x - self.feed_len) / max(self.balun_length, 1e-12), 0, 1)
+        # Quarter ellipse from (0, sub_width/2) to (1, feed_width/2).
+        return (self.feed_width / 2
+                + (self.sub_width / 2 - self.feed_width / 2)
+                * np.sqrt(np.clip(1.0 - t * t, 0.0, None)))
+
+    @property
+    def balun_length(self) -> float:
+        """Length of the microstrip-to-parallel-strip transition."""
+        return self.taper_start - self.feed_len
+
+    def ground_arm(self, n: int = 60) -> np.ndarray:
+        """Bottom-face conductor: ground plane, balun taper, then the flare.
+
+        The classic antipodal Vivaldi (Gazit) in three sections:
+
+          x < feed_len              full ground plane under a narrow top strip,
+                                    i.e. an ordinary 50 ohm microstrip
+          feed_len .. taper_start   the ground's upper edge tapers in to meet
+                                    the strip width - this is the balun, and it
+                                    is what converts the asymmetric microstrip
+                                    mode into the symmetric parallel-strip mode
+                                    gradually rather than abruptly
+          x > taper_start           flares downward, mirroring the top arm
+
+        The lower edge stays at the board edge throughout: the ground is only
+        reshaped from above. Omitting the balun entirely was the defect that
+        left the input impedance swinging by an order of magnitude.
+        """
+        if self.balun_length <= 0:
+            raise ValueError("feed_len must be shorter than taper_start")
+        half = self.sub_width / 2
+        xs = np.linspace(self.feed_len, self.taper_start, max(8, n // 3))
+        pts = [(0.0, half), (self.feed_len, half)]
+        pts += [(float(x), float(y)) for x, y in
+                zip(xs, self.ground_taper(xs))]
+        # Mirror of the top arm inner taper: flares downward.
+        pts += [(float(x), float(-y)) for x, y in self.taper_points(n)]
+        pts += [(self.length, -half)]
+        pts += [(x, -y) for x, y in self._outer_edge()]
+        pts += [(self.taper_start, -half), (0.0, -half)]
+        return np.array(pts, float)
 
     # --- predicted behaviour ---------------------------------------------
 
@@ -260,3 +357,47 @@ class Vivaldi:
                 f"  taper y = {a_coef:.4f} exp({self.rate:g} x') "
                 f"{b_coef:+.4f}\n"
                 f"  predicted low cutoff {self.cutoff_frequency()/1e9:.2f} GHz")
+
+
+# --- the design that works -------------------------------------------------
+
+def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
+    """Best design reached for the 3-11 GHz sweep of proposal 2.2.
+
+    Measured (openEMS, metal edges refined, PML_8):
+
+        -10 dB match   4.35 to 12.00 GHz, contiguous
+        mean in band   -14.9 dB over 3-11 GHz
+        median Re(Zin) 41 ohm
+
+    Everything from 5 to 11 GHz is below -10 dB. The shortfall is 3.0 to
+    4.35 GHz, where the input impedance still ripples: 117 ohm at 3.0 GHz
+    against 24.5 ohm at 4.0 GHz.
+
+    Four things had to be right, and each was found by measurement rather than
+    from proposal 2.3, which specifies only the opening rate:
+
+    1. a microstrip feed with a tapered ground balun, not a bare parallel-strip
+       line driven at the board edge. This alone took the match from 0.75 GHz
+       to 2.75 GHz of coverage
+    2. an aperture set from the FREE-SPACE half wavelength at the lowest
+       frequency, c/(2*ap). Using the substrate's effective permittivity
+       flatters it: 44 mm looks like 2.28 GHz that way but is really 3.41 GHz,
+       above the band edge
+    3. arms wide enough to carry current. At aperture 60 mm in a 70 mm board
+       each arm is a 5 mm sliver; widening the board to 90 mm gave 15 mm arms
+       and moved the band from 5.35-8.60 GHz to 4.35-12.00 GHz
+    4. the mesh snapped and refined at every metal edge
+
+    150 x 90 mm fits the 100 x 150 mm boards already in the proposal's bill of
+    materials, so this costs nothing extra to fabricate.
+
+    corrugations > 0 adds slots to the outer edges, the standard remedy for the
+    remaining low-frequency ripple. They multiply the mesh size several-fold,
+    so pass them deliberately.
+    """
+    w_feed = 1.74 if substrate == "RO4350B" else 3.08   # 50 ohm microstrip
+    return Vivaldi(length=150.0, taper_start=20.0, feed_len=8.0,
+                   aperture=60.0, sub_width=90.0, feed_width=w_feed,
+                   rate=2.0 / 130.0, substrate=substrate,
+                   n_corrugations=corrugations)

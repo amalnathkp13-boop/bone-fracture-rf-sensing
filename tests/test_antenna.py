@@ -287,3 +287,49 @@ def test_mesh_resolution_uses_the_highest_frequency_in_the_substrate():
     src = inspect.getsource(model.build)
     assert "f0 + fc" in src
     assert "eps_r" in src.split("--- mesh")[1]
+
+
+# --- the delivered design -------------------------------------------------
+
+def test_uwb_design_geometry_is_sound():
+    from bonesim.antenna.vivaldi import uwb_3_11
+    v = uwb_3_11()
+    # Aperture must clear the free-space half wavelength at 3 GHz, not the
+    # substrate-loaded one, which flatters it.
+    assert 3e8 / (2 * v.aperture * 1e-3) < 3e9
+    assert v.flare_ratio > 1.5
+    assert v.growth == pytest.approx(2.0)
+    # Arms must be real conductors, not slivers.
+    assert (v.sub_width - v.aperture) / 2 >= 12.0
+    # Fits the boards already in the proposal's BOM.
+    assert v.length <= 150.0 and v.sub_width <= 100.0
+
+
+def test_uwb_design_uses_a_fifty_ohm_microstrip_feed():
+    from bonesim.antenna.vivaldi import uwb_3_11
+    assert uwb_3_11("RO4350B").feed_width == pytest.approx(1.74)
+    assert uwb_3_11("FR4").feed_width == pytest.approx(3.08)
+    v = uwb_3_11()
+    assert 0 < v.feed_len < v.taper_start          # a real balun section
+    assert v.balun_length > 0
+
+
+def test_uwb_design_ground_arm_is_three_sections():
+    from bonesim.antenna.vivaldi import uwb_3_11
+    v = uwb_3_11()
+    g = v.ground_arm(20)
+    assert g[:, 1].max() == pytest.approx(v.sub_width / 2)
+    assert g[:, 1].min() == pytest.approx(-v.sub_width / 2)
+    # Ground taper meets the strip width exactly at taper_start.
+    assert v.ground_taper(v.taper_start) == pytest.approx(v.feed_width / 2)
+    assert v.ground_taper(v.feed_len) == pytest.approx(v.sub_width / 2)
+
+
+def test_corrugations_are_optional_and_bounded():
+    from bonesim.antenna.vivaldi import uwb_3_11
+    assert uwb_3_11().upper_arm(20).shape[0] < \
+        uwb_3_11(corrugations=12).upper_arm(20).shape[0]
+    with pytest.raises(ValueError, match="cuts past the aperture"):
+        uwb_3_11(corrugations=6).__class__(
+            **{**uwb_3_11(corrugations=6).__dict__,
+               "corr_depth": 25.0}).upper_arm(8)

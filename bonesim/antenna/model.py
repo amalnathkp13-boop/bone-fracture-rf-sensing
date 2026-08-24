@@ -44,7 +44,7 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
           max_res_sub: float = 0.7, n_taper: int = 60,
           end_criteria: float = 1e-4, max_timesteps: int = 60000,
           nf2ff_freqs=None, boundary: str = "PML_8",
-          sub_cells: int = 6):
+          sub_cells: int = 6, microstrip_feed: bool = True):
     """Assemble the FDTD problem. Returns (FDTD, CSX, port, nf2ff).
 
     air, max_res_* are in millimetres, matching the mesh unit.
@@ -90,8 +90,13 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
                       [ant.length, ant.sub_width / 2, h], priority=1)
 
     # --- the two arms ----------------------------------------------------
+    # Top face: a 50 ohm microstrip that flares upward.
+    # Bottom face: ground plane, balun taper, then the mirrored flare. The
+    # asymmetry is the point - it is what transitions the microstrip mode into
+    # the parallel-strip mode gradually. See Vivaldi.ground_arm.
     upper = ant.upper_arm(n_taper)
-    lower = ant.lower_arm(n_taper)
+    lower = (ant.ground_arm(n_taper) if microstrip_feed
+             else ant.lower_arm(n_taper))
     top = csx.AddMetal("arm_top")
     top.AddPolygon(upper.T.tolist(), 2, h, priority=10)
     bot = csx.AddMetal("arm_bottom")
@@ -121,6 +126,10 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
     x_lines = [-air, 0.0, ant.taper_start, ant.length, ant.length + air]
     y_lines = [-ant.sub_width / 2 - air, -ant.sub_width / 2, -hw, 0.0, hw,
                ant.sub_width / 2, ant.sub_width / 2 + air]
+    if microstrip_feed:
+        # Resolve the balun taper, whose edge sweeps most of the board width.
+        y_lines += list(ant.ground_taper(
+            np.linspace(ant.feed_len, ant.taper_start, 9)))
     z_lines = ([-air] + list(np.linspace(0.0, h, sub_cells + 1)) + [h + air])
     mesh.AddLine("x", x_lines)
     mesh.AddLine("y", y_lines)
@@ -151,7 +160,7 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
 
 
 def run(ant: Vivaldi, sim_path, freq: np.ndarray, verbose: int = 0,
-        threads: int = 0, **build_kw):
+        threads: int = 0, post_only: bool | None = None, **build_kw):
     """Simulate and return a dict of S11 and the far-field handle.
 
     sim_path should be on a Linux-native filesystem. openEMS writes its field
@@ -166,8 +175,21 @@ def run(ant: Vivaldi, sim_path, freq: np.ndarray, verbose: int = 0,
     sim_path.mkdir(parents=True, exist_ok=True)
 
     fdtd, csx, port, nf2ff = build(ant, **build_kw)
-    fdtd.Run(str(sim_path), verbose=verbose, cleanup=True,
-             numThreads=threads)
+
+    # Skip the solve when its output is already there. openEMS writes the port
+    # voltage and current to port_ut_1 / port_it_1, which is everything
+    # CalcPort needs, so re-analysing a finished run costs nothing. Same
+    # reasoning as the resumable B-scans: a solve is minutes to hours and
+    # losing one to a lost console message is avoidable.
+    done = (sim_path / "port_ut_1").exists() and (sim_path / "port_it_1").exists()
+    if post_only is None:
+        post_only = done
+    if not post_only:
+        fdtd.Run(str(sim_path), verbose=verbose, cleanup=True,
+                 numThreads=threads)
+    elif not done:
+        raise FileNotFoundError(
+            f"{sim_path} has no port output to post-process")
 
     port.CalcPort(str(sim_path), freq)
     s11 = port.uf_ref / port.uf_inc
