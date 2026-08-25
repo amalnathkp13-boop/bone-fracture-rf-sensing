@@ -299,6 +299,21 @@ def methodology(f):
         "here. The processing chain has no knowledge of which produced its "
         "input."))
 
+    f.append(fig("measurement_pipeline.png",
+                 "Figure 2. The method end to end. (a) The antenna steps "
+                 "along the bone axis at a 12 mm standoff, transmitting and "
+                 "receiving at each of 61 positions to give one reflection "
+                 "coefficient per position per frequency. (b) The raw data, "
+                 "in which the fracture is present and invisible. (c) "
+                 "Empty-scene subtraction removes the antenna response but "
+                 "not the layered clutter. (d) Selective singular-value "
+                 "removal leaves the local scattering. (e) Kirchhoff "
+                 "migration focuses it to the true position, dotted. Every "
+                 "panel below (a) is real solver output from one matrix cell, "
+                 "a 1 mm fracture under 6 mm of overlay, not an illustration.",
+                 width=170 * mm, max_h=118 * mm))
+    f.append(Spacer(1, 3 * mm))
+
     f.append(P("2.2&nbsp;&nbsp;Tissue dielectric model", "H2"))
     f.append(P(
         "Permittivity and conductivity follow the Gabriel four-Cole-Cole "
@@ -352,7 +367,7 @@ def stages(f):
         "trace is dominated by direct source-to-receiver coupling, so a "
         "three-scene differencing scheme isolates the echoes."))
     f.append(fig("stage0_solver_verification.png",
-                 "Figure 2. Solver verification. The raw trace (top) is "
+                 "Figure 3. Solver verification. The raw trace (top) is "
                  "swamped by direct coupling; differencing (bottom) recovers "
                  "both echoes. Measured arrivals agree with the analytic "
                  "prediction to 0.3 and 1.3 ps, against a solver time step of "
@@ -360,7 +375,7 @@ def stages(f):
 
     f.append(P("3.2&nbsp;&nbsp;Stage 1 &mdash; Tissue models", "H2"))
     f.append(fig("stage1_tissue_models.png",
-                 "Figure 3. (a) Dispersion of the principal tissues across "
+                 "Figure 4. (a) Dispersion of the principal tissues across "
                  "the working band; blood-filled fracture against cortical "
                  "bone gives 5.5&times; permittivity contrast at 8.3 GHz. "
                  "(b) Two-pole Debye fits reproduce Cole-Cole to within "
@@ -383,7 +398,7 @@ def stages(f):
         "clutter, and Kirchhoff migration focuses the residual scattering "
         "back to its point of origin."))
     f.append(fig("stage2_processing_chain.png",
-                 "Figure 4. The processing chain. The raw B-scan (a) shows no "
+                 "Figure 5. The processing chain. The raw B-scan (a) shows no "
                  "fracture. The singular-value spectrum (b) shows clutter "
                  "dominating the leading components. Migration of the "
                  "residual (c) localises the fracture."))
@@ -399,7 +414,7 @@ def stages(f):
 
     f.append(P("3.4&nbsp;&nbsp;Stage 3 &mdash; Full-wave forward model", "H2"))
     f.append(fig("stage3_full_wave.png",
-                 "Figure 5. A 1 mm fracture under 6 mm of soft-tissue "
+                 "Figure 6. A 1 mm fracture under 6 mm of soft-tissue "
                  "overlay, reconstructed from gprMax full-wave data through "
                  "the chain developed on the independent analytic model."))
 
@@ -410,7 +425,7 @@ def stages(f):
         "nothing downstream is meaningful. The rod is a canonical target with "
         "an unambiguous answer, and the gate is passed."))
     f.append(fig("stage4_brass_rod_gate.png",
-                 "Figure 6. Validation gate. The rod is localised at each "
+                 "Figure 7. Validation gate. The rod is localised at each "
                  "depth, with detection signal-to-noise ratio falling as "
                  "predicted by the two-way attenuation of the intervening "
                  "tissue. Each panel is scaled to its own peak so the "
@@ -428,7 +443,7 @@ def antenna(f):
         "0.762 mm Rogers RO4350B, sized to fit stock already in the bill of "
         "materials."))
     f.append(fig("stage5_antenna.png",
-                 "Figure 7. (a) Antenna geometry: microstrip feed, tapered "
+                 "Figure 8. (a) Antenna geometry: microstrip feed, tapered "
                  "ground balun, exponential flare. (b) Reflection "
                  "coefficient, uniform feed (grey) against tapered feed "
                  "(blue), with the recovered band shaded. Both solved at "
@@ -517,7 +532,7 @@ def antenna(f):
     f.append(KeepTogether([
         P("4.4&nbsp;&nbsp;Fabrication package", "H2"),
         fig("vivaldi_fab_drawing.png",
-                 "Figure 8. Dimensioned fabrication drawing, both faces. "
+                 "Figure 9. Dimensioned fabrication drawing, both faces. "
                  "Generated directly from the design parameters, so it cannot "
                  "diverge from the simulated geometry. Accompanied by DXF and "
                  "STEP exports.", width=170 * mm)]))
@@ -537,7 +552,7 @@ def results(f):
         f"remounts, giving {N['n_scores']} scores. The matrix was solved on a "
         "Google Colab T4 GPU; 192 of 192 cells completed."))
     f.append(fig("stage6_matrix_preview.png",
-                 "Figure 9. Detection score against soft-tissue overlay "
+                 "Figure 10. Detection score against soft-tissue overlay "
                  "across the completed matrix, by fracture state."))
 
     f.append(P("5.2&nbsp;&nbsp;Statistical analysis plan", "H2"))
@@ -581,7 +596,7 @@ def results(f):
     ], [66 * mm, 30 * mm, 55 * mm]))
     f.append(Spacer(1, 4 * mm))
     f.append(fig("stage7_statistics.png",
-                 "Figure 10. (a) The two classes do not overlap. (b) Detection "
+                 "Figure 11. (a) The two classes do not overlap. (b) Detection "
                  "score against overlay for both classes; the margin narrows "
                  "with overlay but never closes. (c) Worst case at the "
                  "thickest overlay against fracture width."))

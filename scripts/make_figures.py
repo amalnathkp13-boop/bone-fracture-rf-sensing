@@ -832,10 +832,152 @@ def stage_limb_models():
            "the flat model the matrix solved, and the cylinder that checks it")
 
 
+# ------------------------------------------- how a measurement is made ---
+
+def stage_pipeline():
+    """Acquisition and processing, end to end, on one real solved cell.
+
+    Every panel below the schematic is actual gprMax output from the matrix,
+    not an illustration. A pipeline diagram drawn with invented data would show
+    what the chain is supposed to do rather than what it does, and the whole
+    point of Stage 2 was that the obvious version of this chain destroys the
+    signal it is meant to recover.
+    """
+    from matplotlib.patches import FancyArrowPatch, Rectangle
+    from bonesim.geometry.phantom import Fracture, Phantom
+    from bonesim.perturb.errors import SpecimenVariation
+
+    nl = chr(10)
+    cell = RUNS / "matrix_colab" / "s00_kerf10_ov06.0.npz"
+    if not cell.exists():
+        print("  pipeline: need runs/matrix_colab/s00_kerf10_ov06.0.npz")
+        return
+    d = ScanData.load(cell)
+
+    # The same four steps the detector actually runs, kept in order.
+    ref = ScanData(d.f, d.x, np.ones_like(d.s11), d.z_antenna, {})
+    sub = subtract_empty_scene(d, ref)
+    noisy = Instrument(seed=0).apply_post(sub)
+    clean = remove_clutter_selective(noisy, EPS_AVG)[0]
+    img = migrate(clean, EPS_AVG)
+    det = detect_snr(img, clean, z_window=(0.003, 0.024), x_margin=0.010)
+
+    fig = plt.figure(figsize=(13.6, 8.4))
+    # The project style enables constrained layout. Combined with the equal
+    # aspect on panel (a), which spans all four columns, the engine shrinks
+    # every column until (a) fits and the data panels collapse to slivers.
+    # This figure places its own axes, so the engine is switched off.
+    fig.set_layout_engine("none")
+    gs = fig.add_gridspec(2, 4, height_ratios=[0.92, 1.0], hspace=0.30,
+                          wspace=0.30, left=0.05, right=0.97, top=0.93,
+                          bottom=0.08)
+
+    # ---- (a) how the measurement is taken -----------------------------
+    ax = fig.add_subplot(gs[0, :])
+    ph = SpecimenVariation().draw(Phantom().with_overlay(0.006), 0)
+    ph = ph.with_fracture(Fracture(0.050, 0.001))
+    x0, x1 = 15.0, 85.0
+    for mat, z0, z1 in ph.stack():
+        ax.add_patch(Rectangle((x0, -z1 * 1e3), x1 - x0, (z1 - z0) * 1e3,
+                               fc=TISSUE_RGB[mat], ec="#999", lw=0.4))
+    xf = ph.fracture.x * 1e3
+    zc0, zc1 = ph.z_cortex * 1e3, (ph.z_cortex + ph.cortex) * 1e3
+    ax.add_patch(Rectangle((xf - 0.9, -zc1), 1.8, zc1 - zc0,
+                           fc=TISSUE_RGB["blood"], ec="none", zorder=4))
+    ax.annotate(f"1 mm fracture, blood filled,{nl}"
+                f"{ph.z_cortex*1e3:.1f} mm below the skin",
+                xy=(xf, -zc0 - 1), xytext=(xf + 11, -32), fontsize=8.4,
+                color=TISSUE_RGB["blood"], ha="left", zorder=8,
+                arrowprops=dict(arrowstyle="->", lw=1.1,
+                                color=TISSUE_RGB["blood"]))
+
+    # The antenna at a few of its 61 stations, with the two-way path drawn
+    # once so the picture stays readable.
+    z_ant = -d.z_antenna * 1e3
+    for i, xa in enumerate(np.linspace(22, 78, 7)):
+        ax.add_patch(Rectangle((xa - 4.5, z_ant), 9.0, 2.4, fc="#2b2b2b",
+                               ec="none", zorder=6))
+        if abs(xa - xf) < 6:
+            for dx, style in ((-1.2, "->"), (1.2, "<-")):
+                ax.annotate("", xy=(xf + dx * 0.6, -zc0), xytext=(xa + dx, z_ant),
+                            arrowprops=dict(arrowstyle=style, lw=1.0,
+                                            color="#0072B2", alpha=0.9),
+                            zorder=7)
+    ax.annotate("", xy=(80, z_ant + 7), xytext=(20, z_ant + 7),
+                arrowprops=dict(arrowstyle="->", lw=1.4, color="#333"))
+    ax.text(50, z_ant + 8.6, "antenna steps along the bone axis, "
+            "61 positions, 1 mm apart", fontsize=8.6, ha="center")
+    ax.text(20.5, z_ant + 1.2, "transmit and receive at each position",
+            fontsize=8.2, color="#0072B2", va="center", ha="left")
+    ax.text(x0 - 1.0, -z_ant * 0 - 1.5, "skin", fontsize=7.6, ha="right",
+            va="center", color="#555")
+    ax.annotate("", xy=(x0 - 3, 0), xytext=(x0 - 3, z_ant),
+                arrowprops=dict(arrowstyle="<->", lw=0.9, color="#444"))
+    ax.text(x0 - 4, z_ant / 2, f"{z_ant:.0f} mm{nl}standoff", fontsize=7.6,
+            ha="right", va="center", color="#333")
+    ax.set_xlim(6, 98); ax.set_ylim(-30, z_ant + 10)
+    ax.set_aspect("equal"); ax.axis("off")
+    ax.set_title("(a) how the measurement is taken: one reflection "
+                 "coefficient per position, per frequency, 3-11 GHz",
+                 fontsize=10.5, pad=4)
+
+    # ---- (b) to (e) what happens to it --------------------------------
+    ext = [d.x[0] * 1e3, d.x[-1] * 1e3, d.f[-1] / 1e9, d.f[0] / 1e9]
+
+    def spec(ax, data, title, note):
+        im = ax.imshow(np.abs(data.s11), aspect="auto", cmap="viridis",
+                       extent=ext)
+        ax.set_xlabel("scan position (mm)", fontsize=8.4)
+        ax.set_ylabel("frequency (GHz)", fontsize=8.4)
+        ax.set_title(title, fontsize=9.5, pad=4)
+        ax.tick_params(labelsize=7.4)
+        ax.grid(False)
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03).ax.tick_params(
+            labelsize=6.6)
+        F.annotate(ax, note, "lower left")
+
+    panels = []
+    ax_b = fig.add_subplot(gs[1, 0]); panels.append(ax_b)
+    spec(ax_b, d, "(b) raw |S11|",
+         f"the fracture is in here{nl}and is invisible")
+    ax_c = fig.add_subplot(gs[1, 1]); panels.append(ax_c)
+    spec(ax_c, noisy, "(c) minus the empty scene",
+         f"removes the antenna;{nl}the layers remain")
+    ax_d = fig.add_subplot(gs[1, 2]); panels.append(ax_d)
+    spec(ax_d, clean, "(d) minus the layer clutter",
+         f"SVD, keeping only what{nl}migration says is local")
+
+    ax = fig.add_subplot(gs[1, 3]); panels.append(ax)
+    F.image_axes(ax, img, db_floor=-25.0)
+    ax.axvline(xf, color="#ffffff", ls=":", lw=1.0, alpha=0.8)
+    ax.set_title("(e) migrated, and scored", fontsize=9.5, pad=4)
+    ax.set_xlabel("position (mm)", fontsize=8.4)
+    ax.set_ylabel("depth (mm)", fontsize=8.4)
+    ax.tick_params(labelsize=7.4)
+    F.annotate(ax, f"detector reads {det.ratio_db:.0f} dB{nl}"
+                   f"dotted = true position", "lower left")
+
+    # Arrows go in the empty band ABOVE the panel titles, not in the gaps
+    # beside the panels. Level with the data the gap is not empty: it holds a
+    # colorbar on the left and an axis label on the right, and the arrows
+    # landed on both.
+    fig.canvas.draw()
+    boxes = [a.get_position() for a in panels]
+    y = boxes[0].y1 + 0.052
+    for left, right in zip(boxes[:-1], boxes[1:]):
+        mid = 0.5 * (left.x1 + right.x0)
+        fig.add_artist(FancyArrowPatch(
+            (mid - 0.020, y), (mid + 0.020, y), transform=fig.transFigure,
+            arrowstyle="-|>", mutation_scale=17, lw=1.7, color="#555"))
+    F.save(fig, "measurement_pipeline",
+           "acquisition and processing, on one real solved cell")
+
+
 STAGES = {0: stage0, 1: stage1, 2: stage2, 3: stage3,
           4: stage4, 5: stage5, 6: stage6, 7: stage7,
           "phantom": stage_phantom3d,
-          "limbs": stage_limb_models}
+          "limbs": stage_limb_models,
+          "pipeline": stage_pipeline}
 
 
 def main() -> int:
