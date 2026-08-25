@@ -43,9 +43,9 @@ def main() -> int:
               "build on Colab.")
         return 1
     print("\nUpload it to Google Drive as:  MyDrive/bonesim/bonesim_colab.zip")
-    print("Then open the notebook for the job you want and run all cells:
-    notebooks/colab_matrix.ipynb     the 192-cell 2D matrix
-    notebooks/colab_stage8_3d.ipynb  the 3D cylindrical model")
+    print("Then open the notebook for the job you want and run all cells:")
+    print("    notebooks/colab_matrix.ipynb     the 192-cell 2D matrix")
+    print("    notebooks/colab_stage8_3d.ipynb  the 3D cylindrical model")
     return 0
 
 
