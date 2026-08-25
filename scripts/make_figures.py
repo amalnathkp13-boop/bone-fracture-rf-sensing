@@ -652,9 +652,190 @@ def stage_phantom3d():
            "modelled slice in 3D and the specimen population")
 
 
+# ------------------------------------------------- the two limb models ---
+
+def _cyl_surface(ax, x0, x1, yc, zc, r, t0, t1, color, alpha=1.0, n=64):
+    """A cylinder wall segment between two angles, drawn along x."""
+    t = np.linspace(t0, t1, n)
+    X, T = np.meshgrid(np.linspace(x0, x1, 2), t)
+    Y = yc + r * np.cos(T)
+    Z = zc + r * np.sin(T)
+    # shade=False: matplotlib lighting turned the skin tone to dark brown and
+    # destroyed the tissue colour coding, which is the only thing the reader
+    # navigates by.
+    ax.plot_surface(X, Y, Z, color=color, alpha=alpha, shade=False,
+                    linewidth=0, antialiased=True, rstride=1, cstride=1)
+
+
+def _cyl_face(ax, x0, x1, yc, zc, r_in, r_out, t, color, alpha=1.0):
+    """The flat radial face exposed by the cut. This is what shows layering."""
+    R, X = np.meshgrid(np.linspace(max(r_in, 0.0), r_out, 2),
+                       np.linspace(x0, x1, 2))
+    Y = yc + R * np.cos(t)
+    Z = zc + R * np.sin(t)
+    ax.plot_surface(X, Y, Z, color=color, alpha=alpha, shade=False,
+                    linewidth=0, antialiased=True, rstride=1, cstride=1)
+
+
+def _cyl_cap(ax, x, yc, zc, r_out, r_in, t0, t1, color, alpha=1.0, n=64):
+    """The annular end face of a shell, which is what shows the layering."""
+    t = np.linspace(t0, t1, n)
+    rr = np.linspace(max(r_in, 0.0), r_out, 2)
+    T, R = np.meshgrid(t, rr)
+    X = np.full_like(T, x)
+    Y = yc + R * np.cos(T)
+    Z = zc + R * np.sin(T)
+    ax.plot_surface(X, Y, Z, color=color, alpha=alpha, shade=False,
+                    linewidth=0, antialiased=True, rstride=1, cstride=1)
+
+
+def stage_limb_models():
+    """The 2D slab the matrix solved, beside the 3D cylinder Stage 8 solves.
+
+    The cutaway is drawn as 2D section views rather than a 3D cutaway solid.
+    Three 3D cutaway attempts all failed the same way: matplotlib's painter
+    algorithm sorts whole surfaces by mean depth, so a large outer shell
+    reliably wins against the small inner ones it is supposed to reveal, and no
+    amount of coplanar offsetting fixes it. Sections are how anatomy is drawn
+    anyway, and they cannot z-fight.
+    """
+    from matplotlib.patches import Circle, Rectangle, Wedge
+    from bonesim.geometry.cylindrical import CylindricalPhantom
+    from bonesim.geometry.phantom import Fracture, Phantom
+    from bonesim.perturb.errors import SpecimenVariation
+
+    cy = CylindricalPhantom(length=0.090)
+    r_l, r_f, r_m = cy.r_limb * 1e3, cy.r_fat * 1e3, cy.r_muscle * 1e3
+    r_c, r_mar = cy.r_cortex * 1e3, cy.r_marrow * 1e3
+    z_b = cy.z_bone_axis * 1e3
+    Lc, so = cy.length * 1e3, cy.standoff * 1e3
+    xf, half = 45.0, 1.0
+
+    nl = chr(10)   # heredoc-safe newline
+    fig = plt.figure(figsize=(13.0, 8.8))
+    gs = fig.add_gridspec(2, 3, width_ratios=[1.2, 0.9, 1.0],
+                          height_ratios=[1.0, 1.30], hspace=0.02, wspace=0.08,
+                          left=0.02, right=0.98, top=0.855, bottom=0.02)
+
+    # ---- (a) the 2D slab, in 3D ---------------------------------------
+    ax = fig.add_subplot(gs[0, 0], projection="3d")
+    ph = SpecimenVariation().draw(Phantom().with_overlay(0.006), 0)
+    ph = ph.with_fracture(Fracture(0.045, 0.001))
+    L, W, kerf = 90.0, 60.0, 3.0
+    z_ct = ph.z_cortex * 1e3
+    for mat, z0, z1 in ph.stack():
+        a, b = z0 * 1e3, z1 * 1e3
+        if mat == "cortical_bone" and a < z_ct + 0.1:
+            _box(ax, 0, xf - kerf / 2, 0, W, a, b, TISSUE_RGB[mat])
+            _box(ax, xf + kerf / 2, L, 0, W, a, b, TISSUE_RGB[mat])
+            _box(ax, xf - kerf / 2, xf + kerf / 2, 0, W, a, b,
+                 TISSUE_RGB["blood"], edge="#5a0d09")
+        else:
+            _box(ax, 0, L, 0, W, a, b, TISSUE_RGB[mat])
+    _box(ax, xf - 28, xf + 28, W * 0.3, W * 0.7, -so - 1.5, -so, "#2b2b2b")
+    _tidy(ax, (0, L), (0, W), (-30, so + 3))
+    ax.set_zticks([])
+    ax.set_title("(a) the plane the 2D solver integrates", fontsize=9.5, pad=8)
+    ax.text2D(0.00, 0.10, "Stages 0-7, the 192-cell matrix\n"
+                          "the bone is a pair of flat layers\n"
+                          "0.2 mm cells, 3-11 GHz, 0.14 M cells",
+              transform=ax.transAxes, fontsize=8, color="#444", zorder=20,
+              linespacing=1.6)
+
+    # ---- (b) transverse section ---------------------------------------
+    ax = fig.add_subplot(gs[0, 1])
+    for r, mat, cz in ((r_l, "skin_dry", -r_l), (r_f, "fat", -r_l),
+                       (r_m, "muscle", -r_l), (r_c, "cortical_bone", -z_b),
+                       (r_mar, "marrow", -z_b)):
+        ax.add_patch(Circle((0, cz), r, fc=TISSUE_RGB[mat], ec="#555",
+                            lw=0.5, zorder=2 + (r_l - r)))
+    ax.plot([-28, 28], [so, so], lw=5, color="#2b2b2b",
+            solid_capstyle="butt", zorder=10)
+    ax.annotate("", xy=(0, 0.2), xytext=(0, so - 0.9),
+                arrowprops=dict(arrowstyle="<->", lw=0.9, color="#333"))
+    ax.text(1.5, so / 2, f"{so:.0f} mm\nstandoff", fontsize=7.6, va="center")
+    ax.annotate(f"near cortex\n{cy.z_cortex*1e3:.0f} mm deep",
+                xy=(0, z_b - r_l + r_c), xytext=(-33, -8), fontsize=7.6,
+                color="#222", ha="left",
+                arrowprops=dict(arrowstyle="->", lw=0.9, color="#444"))
+    ax.set_xlim(-38, 38); ax.set_ylim(-2 * r_l - 3, so + 5)
+    ax.set_aspect("equal"); ax.axis("off")
+    ax.set_title("(b) transverse section", fontsize=9.5, pad=14)
+
+    # ---- (c) longitudinal section -------------------------------------
+    ax = fig.add_subplot(gs[1, :])
+    bands = [("skin_dry", r_l, -r_l), ("fat", r_f, -r_l),
+             ("muscle", r_m, -r_l), ("cortical_bone", r_c, -z_b),
+             ("marrow", r_mar, -z_b)]
+    for i, (mat, r, cz) in enumerate(bands):
+        if mat == "cortical_bone":
+            for x0, x1 in ((0, xf - half), (xf + half, Lc)):
+                ax.add_patch(Rectangle((x0, cz - r), x1 - x0, 2 * r,
+                                       fc=TISSUE_RGB[mat], ec="none",
+                                       zorder=2 + i))
+            ax.add_patch(Rectangle((xf - half, cz - r), 2 * half, 2 * r,
+                                   fc=TISSUE_RGB["blood"], ec="none",
+                                   zorder=2 + i))
+        else:
+            ax.add_patch(Rectangle((0, cz - r), Lc, 2 * r,
+                                   fc=TISSUE_RGB[mat], ec="none", zorder=2 + i))
+    ax.add_patch(Rectangle((0, -z_b - r_mar), Lc, 2 * r_mar,
+                           fc=TISSUE_RGB["marrow"], ec="none", zorder=9))
+    ax.plot([xf - 28, xf + 28], [so, so], lw=5, color="#2b2b2b",
+            solid_capstyle="butt", zorder=12)
+    ax.annotate("blood-filled fracture,\nright through the cortical wall",
+                xy=(xf, -z_b + r_c), xytext=(xf + 11, so + 1),
+                fontsize=8, color=TISSUE_RGB["blood"], ha="left",
+                arrowprops=dict(arrowstyle="->", lw=1.1,
+                                color=TISSUE_RGB["blood"]), zorder=15)
+    ax.text(2, so + 1.5, "antenna scans along the bone axis", fontsize=7.8,
+            color="#333")
+    ax.set_xlim(0, Lc); ax.set_ylim(-2 * r_l - 2, so + 7)
+    ax.set_aspect("equal"); ax.axis("off")
+    ax.set_title("(c) longitudinal section, along the scan axis",
+                 fontsize=9.5, pad=6)
+
+    # ---- (d) the cylinder in 3D, plain --------------------------------
+    ax = fig.add_subplot(gs[0, 2], projection="3d")
+    t = np.linspace(0, 2 * np.pi, 96)
+    X, T = np.meshgrid(np.linspace(0, Lc, 2), t)
+    ax.plot_surface(X, r_l * np.cos(T), -r_l + r_l * np.sin(T),
+                    color=TISSUE_RGB["skin_dry"], shade=False, linewidth=0,
+                    antialiased=True)
+    for x in (0.0, Lc):
+        _cyl_cap(ax, x, 0.0, -r_l, r_l, 0.0, 0, 2 * np.pi,
+                 TISSUE_RGB["skin_dry"])
+    ax.plot([xf - 28, xf + 28], [0, 0], [so, so], lw=5, color="#2b2b2b",
+            solid_capstyle="butt")
+    ax.set_xlim(0, Lc); ax.set_ylim(-r_l - 4, r_l + 4)
+    ax.set_zlim(-2 * r_l - 2, so + 4)
+    ax.view_init(elev=20, azim=-62)
+    ax.set_box_aspect((2.6, 1.7, 1.7), zoom=1.25)
+    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+        pane.pane.set_visible(False)
+        pane._axinfo["grid"]["linewidth"] = 0.0
+    ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+    ax.text2D(0.0, 0.06, "Stage 8, the geometry check\n"
+                         "0.4 mm cells, 3-6 GHz, 9.6 M cells",
+              transform=ax.transAxes, fontsize=8, color="#444", zorder=20,
+              linespacing=1.6)
+    ax.set_title("(d) the 3D domain", fontsize=9.5, pad=8)
+
+    handles = [plt.Rectangle((0, 0), 1, 1, fc=TISSUE_RGB[k], ec="#333", lw=0.4)
+               for k in ("skin_dry", "fat", "muscle", "cortical_bone",
+                         "marrow", "blood")]
+    fig.legend(handles, ["skin", "fat", "muscle", "cortical bone", "marrow",
+                         "blood-filled fracture"],
+               loc="upper center", ncol=6, fontsize=9, frameon=False,
+               bbox_to_anchor=(0.5, 0.995))
+    F.save(fig, "limb_models_2d_3d",
+           "the flat model the matrix solved, and the cylinder that checks it")
+
+
 STAGES = {0: stage0, 1: stage1, 2: stage2, 3: stage3,
           4: stage4, 5: stage5, 6: stage6, 7: stage7,
-          "phantom": stage_phantom3d}
+          "phantom": stage_phantom3d,
+          "limbs": stage_limb_models}
 
 
 def main() -> int:
