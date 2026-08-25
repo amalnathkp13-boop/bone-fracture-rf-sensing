@@ -93,6 +93,7 @@ seconds and only then spend FDTD hours on it.
 | 5 | Antipodal Vivaldi characterisation in openEMS | **complete** — match 2.48-12.00 GHz; gain unmet at 3 GHz, see `docs/stage5-findings.md` |
 | 6 | Full 192-cell experiment matrix (8 specimens) | **complete** — 192/192 on Colab T4 |
 | 7 | Statistical analysis plan (proposal §5) | **complete** — see `docs/stage7-findings.md` |
+| - | RF exposure assessment (ICNIRP 2020 / IEEE C95.1) | **complete** — passes all limits, see `docs/safety-sar.md` |
 
 Stage 4 is the go/no-go. If migration cannot image a 6 mm PEC rod at 20 mm depth in
 phantom, nothing downstream is meaningful — this mirrors the week-6 gate in §9 of the
