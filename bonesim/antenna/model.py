@@ -198,12 +198,17 @@ def run(ant: Vivaldi, sim_path, freq: np.ndarray, verbose: int = 0,
     done = (sim_path / "port_ut_1").exists() and (sim_path / "port_it_1").exists()
     if post_only is None:
         post_only = done
+    marker = sim_path / ".solve_complete"
     if not post_only:
         fdtd.Run(str(sim_path), verbose=verbose, cleanup=True,
                  numThreads=threads)
+        marker.touch()
     elif not done:
         raise FileNotFoundError(
             f"{sim_path} has no port output to post-process")
+
+    if post_only:
+        _check_complete(sim_path)
 
     port.CalcPort(str(sim_path), freq)
     s11 = port.uf_ref / port.uf_inc
@@ -212,6 +217,36 @@ def run(ant: Vivaldi, sim_path, freq: np.ndarray, verbose: int = 0,
     return {"f": freq, "s11": s11, "z_in": z_in,
             "antenna": ant, "sim_path": sim_path,
             "_nf2ff": nf2ff}
+
+
+def _check_complete(sim_path, allow_unmarked: bool = False) -> None:
+    """Refuse to post-process a solve that has not finished.
+
+    openEMS streams the port voltage to disk as it goes, so the file exists
+    from the first timestep and post-processing it *looks* like it works. It
+    does not: a truncated record is a windowed one, and the FFT of a window is
+    not the FFT of the response.
+
+    This bit once, and the cost was a wrong answer acted on. Reading a case
+    that was still solving gave a -10 dB band of 4.35-12.00 GHz where the
+    finished solve gave 4.35-9.60 GHz - optimistic by 2.4 GHz, and reported
+    before the run completed.
+
+    The check is a marker written by run() on success, not a heuristic on the
+    data. A heuristic was tried first and cannot work: the tail of a
+    half-decayed record looks decayed relative to its own peak, so complete
+    runs and 75%-truncated ones both sit near 0.2-0.5% and no threshold
+    separates them.
+    """
+    sim_path = Path(sim_path)
+    if (sim_path / ".solve_complete").exists():
+        return
+    if allow_unmarked:
+        return
+    raise RuntimeError(
+        f"{sim_path.name} has no .solve_complete marker, so the solve either "
+        f"is still running or predates this check. Wait for it, re-run it, or "
+        f"pass allow_unmarked=True if you are certain it finished.")
 
 
 def pattern(result: dict, f_probe: float, theta=None, phi=(0.0, 90.0)):

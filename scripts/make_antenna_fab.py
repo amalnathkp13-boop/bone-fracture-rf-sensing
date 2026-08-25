@@ -18,13 +18,15 @@ board as drawn. Two parts were checked against their datasheets and named on the
 drawing - one solder, one solderless clamp - both suiting the 0.762 mm board,
 which matters because most end-launch parts are cut for 0.062 in.
 
-A top-ground-tab variant does need pads, and rather than steering away from it,
-the footprint was simulated. Copper flanking the feed turns it from microstrip
-into grounded coplanar waveguide, so the question is only whether the gap is
-wide enough for that coupling to die away. Measured in openEMS with the same
-model as the antenna: a 1.0 mm gap costs 3.9 GHz of bandwidth, a 2.5 mm gap is
-indistinguishable from the plain launch. The pads are therefore drawn at 2.5 mm,
-dashed, on their own DXF layers, so they can be included or omitted.
+A top-ground-tab variant does need pads, so the footprint was simulated rather
+than avoided. Measured in openEMS with the same model as the antenna: no pads
+gives 7.65 GHz of match, a 1.0 mm gap 3.75 GHz, a 2.5 mm gap 5.25 GHz. Widening
+the gap recovers the low end, because the coplanar coupling that pulls the
+impedance down dies away past about three substrate heights, but the upper limit
+stays at 9.6 GHz either way - at 12 GHz a 2.5 mm gap is a fifth of a wavelength
+and the pads are a discontinuity. So pads always cost the top of the band. They
+are drawn dashed at 2.5 mm on their own DXF layers, to be omitted whenever the
+connector allows.
 """
 from __future__ import annotations
 
@@ -51,9 +53,9 @@ OUT = Path(__file__).resolve().parent.parent / "figures"
 # at 3 GHz and is not a meaningful scatterer.
 HOLE_D, HOLE_X, HOLE_Y = 3.2, 6.0, 38.0
 
-# Optional coplanar ground pads for a top-ground-tab SMA. 2.5 mm
-# is the qualified gap: simulated identical to the plain
-# microstrip launch, where 1.0 mm costs 3.9 GHz of bandwidth.
+# Optional coplanar ground pads for a top-ground-tab SMA. 2.5 mm is the
+# best gap simulated: it recovers the low end that a 1.0 mm gap loses,
+# though the top of the band goes from 12.0 to 9.6 GHz either way.
 PAD_GAP = 2.5
 
 
@@ -160,7 +162,7 @@ def drawing(ant) -> Path:
                     ax.add_patch(plt.Circle((vx, vy), opt.via_d / 2,
                                             fc="none", ec="#009E73", lw=0.7))
                 ax.annotate(f"OPTIONAL top-ground pads, {PAD_GAP:g} mm gap\n"
-                            f"(only for a top-tab SMA; must be via-stitched)",
+                            f"(top-tab SMA only; costs the band above 9.6 GHz)",
                             xy=(4, ant.feed_width / 2 + PAD_GAP + 2.5),
                             xytext=(26, 30), fontsize=6.5, color="#009E73",
                             bbox=dict(boxstyle="round,pad=0.2", fc="white",
@@ -255,20 +257,28 @@ def drawing(ant) -> Path:
             f"wide enough that the coplanar coupling dies away.\n"
             f"   Simulated, not assumed (openEMS, same model as the antenna):\n"
             f"\n"
-            f"       no pads (as drawn)      4.35 - 12.00 GHz    mean -14.9 dB"
-            f"    median Re(Zin) 41 ohm\n"
-            f"       pads, 1.0 mm gap        5.85 -  9.60 GHz    mean -14.2 dB"
-            f"    median Re(Zin) 39 ohm   <-- loses 3.9 GHz\n"
-            f"       pads, 2.5 mm gap        4.35 - 12.00 GHz    mean -14.7 dB"
-            f"    median Re(Zin) 41 ohm   <-- indistinguishable\n"
+            f"       no pads (as drawn)      4.35 - 12.00 GHz  (7.65 GHz)"
+            f"   mean -14.9 dB   median Re(Zin) 41 ohm\n"
+            f"       pads, 1.0 mm gap        5.85 -  9.60 GHz  (3.75 GHz)"
+            f"   mean -14.2 dB   median Re(Zin) 39 ohm\n"
+            f"       pads, 2.5 mm gap        4.35 -  9.60 GHz  (5.25 GHz)"
+            f"   mean -14.7 dB   median Re(Zin) 41 ohm\n"
             f"\n"
-            f"   USE A GAP OF 2.5 mm OR MORE (about 3x the substrate height, "
-            f"where coplanar coupling becomes negligible). The\n"
-            f"   optional pads are drawn dashed on the top face and carried on "
-            f"DXF layer COPPER_TOP_OPT_PADS - omit that layer for a\n"
-            f"   bottom-ground or clamp part. Pads MUST be stitched to the "
-            f"ground plane by the vias shown; unstitched copper beside\n"
-            f"   a feed line is a resonator, not a ground.\n"
+            f"   PADS ALWAYS COST BANDWIDTH AT THE TOP OF THE BAND. Widening "
+            f"the gap to 2.5 mm recovers the low end - the coplanar\n"
+            f"   coupling that pulls the impedance down dies away past about "
+            f"three substrate heights - but the upper limit stays at\n"
+            f"   9.60 GHz either way, because at 12 GHz a 2.5 mm gap is a "
+            f"fifth of a wavelength and the pads act as a discontinuity.\n"
+            f"\n"
+            f"   SO: prefer a bottom-ground or clamp part and omit the pads "
+            f"entirely. If a top-tab part must be used, use a gap of\n"
+            f"   2.5 mm or more and accept losing the band above 9.6 GHz. The "
+            f"pads are drawn dashed and carried on DXF layers\n"
+            f"   COPPER_TOP_OPT_PADS and VIA_OPT so they can be omitted. They "
+            f"MUST be stitched to the ground plane by the vias\n"
+            f"   shown; unstitched copper beside a feed line is a resonator, "
+            f"not a ground.\n"
             f"\n"
             f"DXF layers: BOARD_OUTLINE, COPPER_TOP, COPPER_BOTTOM, DRILL, "
             f"and the optional COPPER_TOP_OPT_PADS + VIA_OPT.\n"
