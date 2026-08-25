@@ -163,7 +163,7 @@ def drawing(ant) -> Path:
                                             fc="none", ec="#009E73", lw=0.7))
                 ax.annotate(f"OPTIONAL top-ground pads, {PAD_GAP:g} mm gap\n"
                             f"(top-tab SMA only; costs the band above 9.6 GHz)",
-                            xy=(4, ant.feed_width / 2 + PAD_GAP + 2.5),
+                            xy=(4, ant.w_port / 2 + PAD_GAP + 2.5),
                             xytext=(26, 30), fontsize=6.5, color="#009E73",
                             bbox=dict(boxstyle="round,pad=0.2", fc="white",
                                       ec="#009E73", lw=0.6, alpha=0.92),
@@ -189,7 +189,7 @@ def drawing(ant) -> Path:
                                     ((ant.taper_start + L) / 2, "flare", -18)):
                     ax.text(xc, -W / 2 + dy, lab, ha="center", va="top",
                             fontsize=7, color="#0072B2")
-                ax.annotate(f"trace {ant.feed_width:.2f} wide,\ncentred on axis",
+                ax.annotate(f"trace {ant.w_port:.2f} at the port,\ncentred on axis",
                             xy=(0.5, 0), xytext=(24, -26), fontsize=7,
                             arrowprops=dict(arrowstyle="->", lw=0.8))
                 ax.annotate(f"aperture {ant.aperture:.0f}",
@@ -238,13 +238,13 @@ def drawing(ant) -> Path:
             f"   NO EXTRA PADS ARE NEEDED. An end-launch lands its centre pin "
             f"on the trace at the board edge and grounds its body to\n"
             f"   the plane on the opposite face. This board already presents "
-            f"both: the {ant.feed_width:.2f} mm trace runs to x=0 and the "
+            f"both: the {ant.w_port:.2f} mm trace runs to x=0 and the "
             f"ground is\n"
             f"   full width there. The solderless part needs no soldering to "
             f"the board at all.\n"
             f"\n"
             f"   The trace width is a good match rather than luck: "
-            f"{ant.feed_width:.2f} mm against the 0.0635 in (1.61 mm) "
+            f"{ant.w_port:.2f} mm against the 0.0635 in (1.61 mm) "
             f"dielectric diameter of\n"
             f"   the Southwest part - within 8 percent. A launch behaves best "
             f"when the trace is close to the connector dielectric.\n"
@@ -302,7 +302,8 @@ def geometry_json(path: Path, ant) -> None:
     path.write_text(json.dumps({
         "L": ant.length, "W": ant.sub_width, "H": ant.height,
         "feed_len": ant.feed_len, "taper_start": ant.taper_start,
-        "feed_width": ant.feed_width, "aperture": ant.aperture,
+        "feed_width": ant.feed_width, "feed_width_port": ant.w_port,
+        "aperture": ant.aperture,
         "substrate": ant.substrate,
         "hole_d": HOLE_D, "hole_x": HOLE_X, "hole_y": HOLE_Y,
         "top": [[round(x, 4), round(y, 4)] for x, y in ant.upper_arm(120)],

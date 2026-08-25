@@ -165,5 +165,21 @@ def main() -> None:
         print("  on the critical path, not an improvement.")
 
 
-if __name__ == "__main__":
+def custom(lo_ghz: float, hi_ghz: float, label: str) -> None:
+    """Score one arbitrary band. Used to re-measure the margin after a
+    redesign, so the recovered separation is measured rather than assumed."""
+    global BANDS
+    BANDS = [("3.00-11.0 GHz  design target", 3.00e9, 11.0e9),
+             ("4.35-11.0 GHz  antenna, as built", 4.35e9, 11.0e9),
+             (label, lo_ghz * 1e9, hi_ghz * 1e9)]
     main()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 4:
+        custom(float(sys.argv[1]), float(sys.argv[2]), sys.argv[3])
+    elif len(sys.argv) != 1:
+        print("usage: run_band_study.py [f_lo_GHz f_hi_GHz label]")
+        raise SystemExit(2)
+    else:
+        main()
