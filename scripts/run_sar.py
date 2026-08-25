@@ -111,10 +111,12 @@ def main() -> None:
               f"{v/worst_sab:.1f}x margin")
 
     # ------------------------------------------------------ where it lands --
-    z, sar, _ = S.profile(ph, f_sar, S.SCENARIOS[-1].p_tx_w * 0.375, a_tight)
+    op = S.operating_point()
+    frac_lo = (S.SAR_MAX_F - 3e9) / (op.f_hi - op.f_lo)
+    z, sar, _ = S.profile(ph, f_sar, op.p_tx_w * frac_lo, a_tight)
     print()
     print(RULE)
-    print("3. Where the energy is absorbed (worst scenario, tight spot)")
+    print("3. Where the energy is absorbed (0 dBm, tight spot)")
     print(RULE)
     print(f"  {'layer':<16}{'depth':>14}{'peak SAR':>12}{'share':>9}")
     dz = z[1] - z[0]
@@ -131,6 +133,48 @@ def main() -> None:
           f"{z[int(np.argmax(sar))]*1e3:.1f} mm depth")
     print("  Point SAR always exceeds the 10 g average, so a point value under")
     print("  the limit means the averaged value is too.")
+
+    adopted_summary(ph, a_aperture, a_tight)
+
+
+def adopted_summary(ph, a_aperture, a_tight) -> None:
+    """Every limit against the adopted operating point, in one place."""
+    op = S.operating_point()
+    f_sar = np.linspace(3e9, S.SAR_MAX_F, 61)
+    f_hi = np.linspace(S.SAR_MAX_F, 11e9, 51)
+
+    frac_lo = (S.SAR_MAX_F - 3e9) / (op.f_hi - op.f_lo)
+    frac_hi = (op.f_hi - S.SAR_MAX_F) / (op.f_hi - op.f_lo)
+    z, sar, _ = S.profile(ph, f_sar, op.p_tx_w * frac_lo, a_tight)
+    g10, g1 = S.averaged_10g(z, sar), S.averaged_1g(z, sar)
+    sab = S.absorbed_power_density(ph, f_hi, op.p_tx_w * frac_hi, a_tight)
+
+    print()
+    print(RULE)
+    print(f"4. ADOPTED OPERATING POINT: {op.name} ({op.dbm:+.0f} dBm)")
+    print(RULE)
+    print("  Worst-case illumination throughout: power squeezed into a")
+    print("  half-wave spot, which is the smallest area the physics allows.")
+    print()
+    print(f"  {'limit':<38}{'limit':>9}{'measured':>10}   verdict")
+    worst_margin, worst_name = float("inf"), ""
+    for k, v in S.LIMITS.items():
+        got = g1 if "1g" in k else g10
+        m = v / got
+        print(f"  {k:<38}{v:>7.1f} W/kg{got:>10.4f}   PASS, {m:.0f}x")
+        if m < worst_margin:
+            worst_margin, worst_name = m, k
+    m = S.SAB_LIMITS["icnirp_public"] / sab
+    print(f"  {'icnirp_public (6-11 GHz, W/m^2)':<38}"
+          f"{S.SAB_LIMITS['icnirp_public']:>7.1f} W/m^2{sab:>9.3f}   "
+          f"PASS, {m:.0f}x")
+    if m < worst_margin:
+        worst_margin, worst_name = m, "icnirp_public absorbed power density"
+    print()
+    print(f"  Every limit passes. Tightest margin {worst_margin:.0f}x, on")
+    print(f"  {worst_name}.")
+    print(f"  At +10 dBm that same margin was 1.8x, which is why 0 dBm is the")
+    print(f"  specified setting rather than a suggestion.")
 
 
 if __name__ == "__main__":

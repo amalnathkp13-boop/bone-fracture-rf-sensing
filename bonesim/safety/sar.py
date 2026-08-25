@@ -83,6 +83,7 @@ class Exposure:
     f_lo: float
     f_hi: float
     note: str = ""
+    adopted: bool = False
 
     @property
     def dbm(self) -> float:
@@ -95,9 +96,23 @@ class Exposure:
 SCENARIOS = [
     Exposure("FCC Part 15 UWB", 5.56e-4, 3.1e9, 10.6e9,
              "-41.3 dBm/MHz EIRP over 7.5 GHz"),
-    Exposure("VNA at 0 dBm", 1.0e-3, 3e9, 11e9, "typical bench setting"),
-    Exposure("VNA at +10 dBm", 1.0e-2, 3e9, 11e9, "worst case bench setting"),
+    Exposure("VNA at 0 dBm", 1.0e-3, 3e9, 11e9,
+             "ADOPTED operating point", adopted=True),
+    Exposure("VNA at +10 dBm", 1.0e-2, 3e9, 11e9,
+             "rejected: only 1.8x on absorbed power density"),
 ]
+
+
+def operating_point() -> Exposure:
+    """The transmit power this experiment is specified to run at.
+
+    0 dBm rather than the +10 dBm a VNA will happily give you. The first
+    assessment showed +10 dBm sitting within 1.8x of the ICNIRP public limit
+    on absorbed power density above 6 GHz - the only quantity in the whole
+    study that was not comfortable. Dropping 10 dB costs nothing that matters:
+    the detector has 40.8 dB of separation and spends none of it here.
+    """
+    return next(s for s in SCENARIOS if s.adopted)
 
 
 def _layers(phantom):
