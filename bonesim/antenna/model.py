@@ -102,6 +102,20 @@ def build(ant: Vivaldi, f0: float = 7e9, fc: float = 5e9,
     bot = csx.AddMetal("arm_bottom")
     bot.AddPolygon(lower.T.tolist(), 2, 0.0, priority=10)
 
+    # Optional coplanar ground pads at the feed, for a top-ground-tab SMA,
+    # with stitching vias to the plane below. Without the vias the pads are
+    # floating copper beside a transmission line - a resonator, not a ground.
+    pads = ant.ground_pads()
+    if pads:
+        pad = csx.AddMetal("feed_ground_pads")
+        for poly in pads:
+            arr = np.asarray(poly, float)
+            pad.AddPolygon(arr.T.tolist(), 2, h, priority=10)
+        via = csx.AddMetal("feed_vias")
+        for vx, vy in ant.via_positions():
+            via.AddCylinder([vx, vy, 0.0], [vx, vy, h], ant.via_d / 2,
+                            priority=12)
+
     hw = ant.w_port / 2
 
     # --- feed ------------------------------------------------------------

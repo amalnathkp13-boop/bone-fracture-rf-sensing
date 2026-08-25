@@ -18,9 +18,13 @@ board as drawn. Two parts were checked against their datasheets and named on the
 drawing - one solder, one solderless clamp - both suiting the 0.762 mm board,
 which matters because most end-launch parts are cut for 0.062 in.
 
-The one variant that *would* need pads is a top-ground-tab type. That is called
-out as something to avoid rather than accommodated, because copper flanking the
-feed changes the launch and this design was validated without it.
+A top-ground-tab variant does need pads, and rather than steering away from it,
+the footprint was simulated. Copper flanking the feed turns it from microstrip
+into grounded coplanar waveguide, so the question is only whether the gap is
+wide enough for that coupling to die away. Measured in openEMS with the same
+model as the antenna: a 1.0 mm gap costs 3.9 GHz of bandwidth, a 2.5 mm gap is
+indistinguishable from the plain launch. The pads are therefore drawn at 2.5 mm,
+dashed, on their own DXF layers, so they can be included or omitted.
 """
 from __future__ import annotations
 
@@ -36,7 +40,7 @@ import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
 from bonesim import figures as F
-from bonesim.antenna.vivaldi import uwb_3_11
+from bonesim.antenna.vivaldi import Vivaldi, uwb_3_11
 
 OUT = Path(__file__).resolve().parent.parent / "figures"
 
@@ -47,13 +51,18 @@ OUT = Path(__file__).resolve().parent.parent / "figures"
 # at 3 GHz and is not a meaningful scatterer.
 HOLE_D, HOLE_X, HOLE_Y = 3.2, 6.0, 38.0
 
+# Optional coplanar ground pads for a top-ground-tab SMA. 2.5 mm
+# is the qualified gap: simulated identical to the plain
+# microstrip launch, where 1.0 mm costs 3.9 GHz of bandwidth.
+PAD_GAP = 2.5
+
 
 # ---------------------------------------------------------------- DXF ------
 
 def dxf(path: Path, ant) -> None:
     """Minimal R12 DXF: closed polylines on named layers, plus drill circles."""
     layers = [("BOARD_OUTLINE", 7), ("COPPER_TOP", 2), ("COPPER_BOTTOM", 1),
-              ("DRILL", 5)]
+              ("DRILL", 5), ("COPPER_TOP_OPT_PADS", 3), ("VIA_OPT", 4)]
     o = []
 
     def tag(code, value):
@@ -86,6 +95,13 @@ def dxf(path: Path, ant) -> None:
     polyline([tuple(p) for p in ant.ground_arm(120)], "COPPER_BOTTOM")
     for y in (HOLE_Y, -HOLE_Y):
         circle(HOLE_X, y, HOLE_D, "DRILL")
+
+    # Optional, on their own layers: omit for a bottom-ground or clamp part.
+    opt = Vivaldi(**{**ant.__dict__, "pad_gap": PAD_GAP})
+    for poly in opt.ground_pads():
+        polyline(poly, "COPPER_TOP_OPT_PADS")
+    for vx, vy in opt.via_positions():
+        circle(vx, vy, opt.via_d, "VIA_OPT")
 
     tag(0, "ENDSEC"); tag(0, "EOF")
     path.write_text("\n".join(o) + "\n", encoding="ascii")
@@ -135,6 +151,22 @@ def drawing(ant) -> Path:
             ax.grid(alpha=0.18)
 
             if row == 0:
+                opt = Vivaldi(**{**ant.__dict__, "pad_gap": PAD_GAP})
+                for poly in opt.ground_pads():
+                    a = np.asarray(poly + [poly[0]], float)
+                    ax.plot(a[:, 0], a[:, 1], ls="--", lw=0.9,
+                            color="#009E73")
+                for vx, vy in opt.via_positions():
+                    ax.add_patch(plt.Circle((vx, vy), opt.via_d / 2,
+                                            fc="none", ec="#009E73", lw=0.7))
+                ax.annotate(f"OPTIONAL top-ground pads, {PAD_GAP:g} mm gap\n"
+                            f"(only for a top-tab SMA; must be via-stitched)",
+                            xy=(4, ant.feed_width / 2 + PAD_GAP + 2.5),
+                            xytext=(26, 30), fontsize=6.5, color="#009E73",
+                            bbox=dict(boxstyle="round,pad=0.2", fc="white",
+                                      ec="#009E73", lw=0.6, alpha=0.92),
+                            arrowprops=dict(arrowstyle="->", lw=0.8,
+                                            color="#009E73"))
                 _dim(ax, 0, W / 2, L, W / 2, f"{L:.0f}", off=8)
                 ax.annotate("", xy=(-13, W / 2), xytext=(-13, -W / 2),
                             arrowprops=dict(arrowstyle="<->", color="#0072B2",
@@ -215,13 +247,31 @@ def drawing(ant) -> Path:
             f"   the Southwest part - within 8 percent. A launch behaves best "
             f"when the trace is close to the connector dielectric.\n"
             f"\n"
-            f"   A variant with ground tabs on the TOP face would want two "
-            f"pads flanking the trace. Those are NOT drawn and NOT in\n"
-            f"   the simulated model: copper beside the feed changes the "
-            f"launch, and this design was validated without it. Prefer\n"
-            f"   a bottom-ground or clamp part.\n"
+            f"   TOP-GROUND-TAB VARIANTS ARE SUPPORTED, with one condition. "
+            f"Such a connector grounds through tabs sitting on the top\n"
+            f"   face either side of the pin, so it needs copper there. That "
+            f"turns the feed from microstrip into grounded coplanar\n"
+            f"   waveguide and pulls the impedance down - unless the gap is "
+            f"wide enough that the coplanar coupling dies away.\n"
+            f"   Simulated, not assumed (openEMS, same model as the antenna):\n"
             f"\n"
-            f"DXF layers: BOARD_OUTLINE, COPPER_TOP, COPPER_BOTTOM, DRILL. "
+            f"       no pads (as drawn)      4.35 - 12.00 GHz    mean -14.9 dB"
+            f"    median Re(Zin) 41 ohm\n"
+            f"       pads, 1.0 mm gap        5.85 -  9.60 GHz    mean -14.2 dB"
+            f"    median Re(Zin) 39 ohm   <-- loses 3.9 GHz\n"
+            f"       pads, 2.5 mm gap        4.35 - 12.00 GHz    mean -14.7 dB"
+            f"    median Re(Zin) 41 ohm   <-- indistinguishable\n"
+            f"\n"
+            f"   USE A GAP OF 2.5 mm OR MORE (about 3x the substrate height, "
+            f"where coplanar coupling becomes negligible). The\n"
+            f"   optional pads are drawn dashed on the top face and carried on "
+            f"DXF layer COPPER_TOP_OPT_PADS - omit that layer for a\n"
+            f"   bottom-ground or clamp part. Pads MUST be stitched to the "
+            f"ground plane by the vias shown; unstitched copper beside\n"
+            f"   a feed line is a resonator, not a ground.\n"
+            f"\n"
+            f"DXF layers: BOARD_OUTLINE, COPPER_TOP, COPPER_BOTTOM, DRILL, "
+            f"and the optional COPPER_TOP_OPT_PADS + VIA_OPT.\n"
             f"Units mm. Origin at the feed edge, y=0 on the antenna axis."
         )
         ax.text(0.0, 1.0, notes, va="top", ha="left", fontsize=6.6,

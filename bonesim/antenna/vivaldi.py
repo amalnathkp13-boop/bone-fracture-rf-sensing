@@ -66,6 +66,10 @@ class Vivaldi:
     feed_width_port: float | None = None   # None means no taper
     rate: float = 0.08
     substrate: str = "RO4350B"
+    pad_gap: float | None = None  # coplanar ground pads at the feed; None = none
+    pad_width: float = 5.0        # how far each pad extends outward, mm
+    via_d: float = 0.6            # via diameter, mm
+    via_pitch: float = 2.0        # via spacing along the pad, mm
     n_corrugations: int = 0       # slots in the outer edge; 0 disables
     corr_depth: float = 8.0       # mm, inward from the substrate edge
     corr_width: float = 4.0       # mm, along the antenna axis
@@ -285,6 +289,46 @@ class Vivaldi:
         arm = self.upper_arm(n).copy()
         arm[:, 1] *= -1.0
         return arm
+
+    # --- optional coplanar ground pads at the feed ------------------------
+
+    def ground_pads(self):
+        """Two top-face pads flanking the trace, for a top-ground-tab SMA.
+
+        Some end-launch connectors ground through tabs that sit on the TOP
+        face either side of the signal pin, so they need copper there. Adding
+        it turns the feed from microstrip into grounded coplanar waveguide and
+        pulls the impedance down, which is why the gap matters: coupling to the
+        coplanar ground falls away once the gap exceeds roughly three substrate
+        heights, here about 2.3 mm.
+
+        Returns [] when pad_gap is None, which is the plain microstrip launch
+        the antenna was validated with.
+        """
+        if self.pad_gap is None:
+            return []
+        inner = self.feed_width / 2 + self.pad_gap
+        outer = inner + self.pad_width
+        return [[(0.0, inner), (self.feed_len, inner),
+                 (self.feed_len, outer), (0.0, outer)],
+                [(0.0, -inner), (self.feed_len, -inner),
+                 (self.feed_len, -outer), (0.0, -outer)]]
+
+    def via_positions(self):
+        """Stitching vias tying the top pads to the ground plane.
+
+        Without them the pads are floating copper beside the feed, which is
+        worse than no pads at all: an isolated conductor next to a transmission
+        line is a resonator, not a ground.
+        """
+        if self.pad_gap is None:
+            return []
+        centre = self.feed_width / 2 + self.pad_gap + self.pad_width / 2
+        n = max(2, int(self.feed_len // self.via_pitch))
+        xs = np.linspace(self.via_pitch / 2,
+                         self.feed_len - self.via_pitch / 2, n)
+        return [(float(x), float(sy * centre))
+                for x in xs for sy in (1.0, -1.0)]
 
     def ground_taper(self, x):
         """Upper edge of the ground plane through the balun section.

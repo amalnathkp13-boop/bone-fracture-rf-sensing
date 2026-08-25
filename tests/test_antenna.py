@@ -333,3 +333,57 @@ def test_corrugations_are_optional_and_bounded():
         uwb_3_11(corrugations=6).__class__(
             **{**uwb_3_11(corrugations=6).__dict__,
                "corr_depth": 25.0}).upper_arm(8)
+
+
+# --- coplanar ground pads at the feed --------------------------------------
+
+def test_no_pads_by_default():
+    """The validated design is plain microstrip; pads are opt-in."""
+    from bonesim.antenna.vivaldi import uwb_3_11
+    v = uwb_3_11()
+    assert v.pad_gap is None
+    assert v.ground_pads() == []
+    assert v.via_positions() == []
+
+
+def test_pads_flank_the_trace_without_touching_it():
+    from bonesim.antenna.vivaldi import Vivaldi, uwb_3_11
+    v = Vivaldi(**{**uwb_3_11().__dict__, "pad_gap": 2.5})
+    pads = v.ground_pads()
+    assert len(pads) == 2
+    inner = v.feed_width / 2 + v.pad_gap
+    for poly in pads:
+        ys = [abs(y) for _, y in poly]
+        assert min(ys) == pytest.approx(inner)
+        assert min(ys) > v.feed_width / 2      # a real gap, not touching
+    # One pad each side.
+    assert (max(y for _, y in pads[0]) > 0) != (max(y for _, y in pads[1]) > 0)
+
+
+def test_pads_are_stitched_to_the_ground_plane():
+    """Floating copper beside a feed line is a resonator, not a ground."""
+    from bonesim.antenna.vivaldi import Vivaldi, uwb_3_11
+    v = Vivaldi(**{**uwb_3_11().__dict__, "pad_gap": 2.5})
+    vias = v.via_positions()
+    assert len(vias) >= 4
+    centre = v.feed_width / 2 + v.pad_gap + v.pad_width / 2
+    for vx, vy in vias:
+        assert abs(abs(vy) - centre) < 1e-9    # centred on the pads
+        assert 0 < vx < v.feed_len             # within the microstrip section
+    assert len({round(vy, 6) for _, vy in vias}) == 2   # both sides stitched
+
+
+def test_pads_stay_inside_the_board():
+    from bonesim.antenna.vivaldi import Vivaldi, uwb_3_11
+    v = Vivaldi(**{**uwb_3_11().__dict__, "pad_gap": 2.5})
+    for poly in v.ground_pads():
+        for _, y in poly:
+            assert abs(y) <= v.sub_width / 2 + 1e-9
+
+
+def test_wider_gap_moves_the_pads_further_out():
+    from bonesim.antenna.vivaldi import Vivaldi, uwb_3_11
+    base = uwb_3_11().__dict__
+    near = Vivaldi(**{**base, "pad_gap": 1.0}).ground_pads()[0]
+    far = Vivaldi(**{**base, "pad_gap": 2.5}).ground_pads()[0]
+    assert min(y for _, y in far) > min(y for _, y in near)
