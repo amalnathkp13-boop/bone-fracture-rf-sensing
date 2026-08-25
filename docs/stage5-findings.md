@@ -12,10 +12,10 @@ such rather than papered over.
 |---|---|
 | openEMS v0.37.0-rc1 built, Python bindings working | done |
 | FR4 costs "a few dB above 8 GHz" (2.3) | **confirmed: 2.4 dB at 9 GHz, 3.6 at 11** |
-| Gain 8-10 dBi (2.2) | met above ~7 GHz only; 3.7 dBi at 3 GHz |
+| Gain 8-10 dBi (2.2) | **being re-measured for the tapered design** - the old figure was the uniform-feed antenna |
 | S11 < -10 dB across 3-11 GHz (2.2) | **met: 99.69% of the band, worst -9.98 dB at one 25 MHz point** |
 | model validated against a known-good design | **done** - openEMS patch tutorial reproduces at Zin 49.7+4.5j |
-| 50 ohm median input impedance | **achieved** at a 1.8 mm feed (51 ohm) |
+| 50 ohm median input impedance | **achieved**: 45.6 ohm median with the 4.5/1.74 mm taper |
 
 **Stage 5 is not on the critical path.** The imaging model excites with a
 hertzian dipole in gprMax, not with this antenna, so Stages 6 and 7 are not

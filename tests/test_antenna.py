@@ -306,10 +306,20 @@ def test_uwb_design_geometry_is_sound():
 
 
 def test_uwb_design_uses_a_fifty_ohm_microstrip_feed():
+    """The PORT must be 50 ohm microstrip; the flare end is tuned.
+
+    This asserted feed_width until the design gained a taper, which is the
+    same confusion that reached the fab drawing: feed_width is the FLARE end,
+    w_port is what the SMA lands on. They were equal while the feed was
+    uniform. The 50 ohm requirement has always been about the port, so that is
+    what is asserted now - and the flare end is asserted to differ, so a silent
+    revert to a uniform feed fails here rather than in a sweep.
+    """
     from bonesim.antenna.vivaldi import uwb_3_11
-    assert uwb_3_11("RO4350B").feed_width == pytest.approx(1.74)
-    assert uwb_3_11("FR4").feed_width == pytest.approx(3.08)
+    assert uwb_3_11("RO4350B").w_port == pytest.approx(1.74)
+    assert uwb_3_11("FR4").w_port == pytest.approx(3.08)
     v = uwb_3_11()
+    assert v.feed_width > v.w_port                 # a taper, not a uniform line
     assert 0 < v.feed_len < v.taper_start          # a real balun section
     assert v.balun_length > 0
 
