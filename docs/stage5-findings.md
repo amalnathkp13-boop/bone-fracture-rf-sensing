@@ -12,7 +12,7 @@ such rather than papered over.
 |---|---|
 | openEMS v0.37.0-rc1 built, Python bindings working | done |
 | FR4 costs "a few dB above 8 GHz" (2.3) | **confirmed: 2.4 dB at 9 GHz, 3.6 at 11** |
-| Gain 8-10 dBi (2.2) | **met 4 GHz upward** (11.9 / 12.5 / 12.1 / 9.3 dBi at 5/7/9/11); 7.02 dBi at 3 GHz, short by 1.0 dB |
+| Gain 8-10 dBi (2.2) | **met 4 GHz upward**; **UNMET at 3 GHz** at 7.02 dBi, and shown below not to be reachable by resizing |
 | S11 < -10 dB across 3-11 GHz (2.2) | **met: 99.69% of the band, worst -9.98 dB at one 25 MHz point** |
 | model validated against a known-good design | **done** - openEMS patch tutorial reproduces at Zin 49.7+4.5j |
 | 50 ohm median input impedance | **achieved**: 45.6 ohm median with the 4.5/1.74 mm taper |
@@ -327,11 +327,62 @@ the right tool there. It is the optimistic case for a band that is merely
 poorly matched at the edges. Treating -9.98 dB at 4.775 GHz as equivalent to
 -16.8 dB is an approximation, though a 0.02 dB one.
 
+## Gain, and one requirement that is not met
+
+Measured on the tapered design, peak of the endfire pattern:
+
+| frequency | peak gain | S11 |
+|---|---|---|
+| 3 GHz | **7.02 dBi** | -15.53 dB |
+| 5 GHz | 11.87 dBi | -13.07 dB |
+| 7 GHz | 12.49 dBi | -18.27 dB |
+| 9 GHz | 12.06 dBi | -14.63 dB |
+| 11 GHz | 9.33 dBi | -16.39 dB |
+
+Proposal 2.2 asks for 8-10 dBi. It is met from about 4 GHz upward and **unmet
+at 3 GHz, by 1.0 dB**.
+
+The taper already did most of the work here for free: the uniform-feed design
+gave 3.7 dBi at 3 GHz and this gives 7.02, because an antenna that reflects
+less radiates more. The remaining decibel was then chased down both available
+levers, and both made it worse:
+
+| design | 3 GHz gain | covered in 3-11 GHz | worst in band |
+|---|---|---|---|
+| **150 x 90, aperture 60 (adopted)** | **7.02 dBi** | **99.69%** | **-9.98 dB** |
+| 150 x 100, aperture 70 | 7.74 dBi | 93.46% | -9.54 dB |
+| 170 x 90, aperture 60 | 6.09 dBi | 91.90% | -6.92 dB |
+
+Widening the aperture bought +0.72 dB and cost 6% of the match - the same trade
+the Stage 5 sweep found with a uniform feed, now confirmed with a tapered one.
+Lengthening to 170 mm was predicted to help by reading the measured gain as a
+function of L/lambda, and instead made both worse: it collapsed the 3 GHz match
+to -6.96 dB, and gain follows the match down. That prediction conflated length
+with aperture, since both change with frequency on a fixed antenna, and it was
+wrong.
+
+Acceptance criteria for both tests were written into the scripts before the
+runs, so neither result could be rationalised afterwards. Both were rejected by
+their own criteria.
+
+**So the requirement is reported as unmet rather than engineered at.** The
+design is co-optimised for the match across 3-11 GHz, and at 3 GHz it is
+1.5 wavelengths long with a 0.6-wavelength mouth. Scaling either dimension
+breaks the match, and lost match costs gain directly. 8-10 dBi across the whole
+of 3-11 GHz is over-specified for a board this size; it is achievable at the
+top of the band and not at the bottom.
+
+This does not block anything. The imaging model excites with a hertzian dipole
+in gprMax, so the 40.8 dB separation of Stage 7 does not depend on antenna
+gain, and the band study's conclusion rests on the MATCH, which is met.
+
 ## Status
 
-**Stage 5 is complete.** The antenna meets the 3-11 GHz specification of
-proposal 2.2 to within 0.02 dB at a single frequency point, on a board already
-in the bill of materials.
+**Stage 5 is complete.** The antenna meets the 3-11 GHz MATCH specification
+of proposal 2.2 to within 0.02 dB at a single frequency point, on a board
+already in the bill of materials. The GAIN specification is met from about
+4 GHz upward and is unmet at 3 GHz by 1.0 dB, which was measured, chased down
+both available levers, and reported rather than engineered at.
 
 The stage began at 4.00-6.40 GHz with a mean of -10.9 dB and an input impedance
 of 27 ohm. It passed through 4.35-12.00 GHz. It ends at 2.48-12.00 GHz,

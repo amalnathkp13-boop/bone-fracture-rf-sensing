@@ -90,7 +90,7 @@ seconds and only then spend FDTD hours on it.
 | 2 | Analytic forward model + full processing chain | **complete** |
 | 3 | gprMax geometry builder and B-scan driver | **complete** |
 | 4 | Brass-rod validation gate (proposal §9) | **complete** |
-| 5 | Antipodal Vivaldi characterisation in openEMS | **complete** — 2.48-12.00 GHz, see `docs/stage5-findings.md` |
+| 5 | Antipodal Vivaldi characterisation in openEMS | **complete** — match 2.48-12.00 GHz; gain unmet at 3 GHz, see `docs/stage5-findings.md` |
 | 6 | Full 192-cell experiment matrix (8 specimens) | **complete** — 192/192 on Colab T4 |
 | 7 | Statistical analysis plan (proposal §5) | **complete** — see `docs/stage7-findings.md` |
 
