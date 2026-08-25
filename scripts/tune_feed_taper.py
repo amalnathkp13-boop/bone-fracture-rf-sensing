@@ -54,9 +54,27 @@ MAX_TS = 30000
 # feed_width_port stays 1.74 mm throughout: that is 50 ohm microstrip on this
 # substrate and it is what the SMA has to see.
 VARIANTS = {
-    "t275_l08": (2.75, 1.74, 8.0),    # transformer, as-built length
-    "t275_l12": (2.75, 1.74, 12.0),   # transformer, a true quarter wave
-    "t350_l12": (3.50, 1.74, 12.0),   # stronger transformation
+    # First pass, WIDER at the flare. This was the wrong direction and the
+    # answer was already in vivaldi.py: median Re(Zin) is 43 / 29 / 19 ohm for
+    # feed widths of 1.5 / 3.0 / 5.0 mm, so Zin falls as width rises. The
+    # plateau needs Zin RAISED from 24 ohm toward 50, so the flare end has to
+    # get narrower. Kept, because measuring the wrong direction is what
+    # established the gradient is real and monotonic.
+    "t275_l08": (2.75, 1.74, 8.0),
+    "t275_l12": (2.75, 1.74, 12.0),
+    "t350_l12": (3.50, 1.74, 12.0),
+    # Second pass, WIDER still. The first three points looked like a failure
+    # until the third landed: Re(Zin) at 4 GHz rises monotonically with the
+    # flare-end width, 24.4 / 24.5 / 25.9 / 29.1 ohm for 1.74 / 2.75 / 2.75 /
+    # 3.50 mm, and 3.50 mm covers 94% of 3-11 GHz against the baseline's 84%.
+    #
+    # The vivaldi.py calibration (43 / 29 / 19 ohm for 1.5 / 3.0 / 5.0 mm) runs
+    # the OTHER way, and that is not a contradiction: it describes a UNIFORM
+    # line, where widening lowers the line impedance everywhere. Here the port
+    # is pinned at 1.74 mm, so widening the flare end steepens a taper instead
+    # of shifting a uniform line, and a taper transforms upward.
+    "w400_l12": (4.00, 1.74, 12.0),
+    "w450_l12": (4.50, 1.74, 12.0),
 }
 
 
