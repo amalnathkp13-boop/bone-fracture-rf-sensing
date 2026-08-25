@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+title: >-
+  bonesim: a virtual UWB microwave imaging study for long-bone
+  fracture detection
+message: If you use this software or its results, please cite it.
+type: software
+authors:
+  - given-names: Amalnath
+    family-names: K P
+repository-code: https://github.com/amalnathkp13-boop/bone-fracture-rf-sensing
+license: MIT
+date-released: 2026-08-25
+keywords:
+  - microwave imaging
+  - ultra-wideband
+  - bone fracture
+  - FDTD
+  - gprMax
+  - openEMS
+  - Vivaldi antenna
+abstract: >-
+  A complete, purely computational study of non-invasive long-bone fracture
+  detection by ultra-wideband microwave imaging over 3-11 GHz. Tissue
+  dielectrics, electromagnetic propagation, antenna design, the imaging chain
+  and the statistical analysis are all modelled with open-source software; no
+  hardware was built. Across 192 full-wave acquisitions from eight simulated
+  specimens, fractured and intact limbs separate by 40.8 dB with no overlap.
+  The study also demonstrates experimentally that a saturated area-under-curve
+  statistic conceals the loss of more than half that margin when usable
+  bandwidth is restricted.

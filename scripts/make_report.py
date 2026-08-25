@@ -26,7 +26,9 @@ from reportlab.platypus import (BaseDocTemplate, Frame, Image, KeepTogether,
 ROOT = Path(__file__).resolve().parent.parent
 FIG = ROOT / "figures"
 OUT = ROOT / "Bone_Fracture_RF_Sensing_Report.pdf"
-N = json.loads((ROOT / "runs" / "report_numbers.json").read_text())
+# results/ is committed; runs/ is not. The report must build from a
+# clean clone with no simulation data present.
+N = json.loads((ROOT / "results" / "report_numbers.json").read_text())
 
 INK = colors.HexColor("#1a1a1a")
 ACCENT = colors.HexColor("#0072B2")

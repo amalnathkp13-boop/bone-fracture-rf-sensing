@@ -1,0 +1,32 @@
+name: tests
+
+# Runs the parts of the study that need no solver: the whole unit suite, the
+# exposure assessment, and the report build. gprMax and openEMS are built from
+# source and take roughly an hour, so they are deliberately not installed here;
+# what this guards is that the analysis code and its numbers still run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m pytest tests/ -q
+      - name: Exposure assessment
+        run: python scripts/run_sar.py
+      - name: Rebuild the report
+        run: python scripts/make_report.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: Bone_Fracture_RF_Sensing_Report.pdf

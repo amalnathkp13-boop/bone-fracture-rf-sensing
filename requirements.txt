@@ -1,0 +1,13 @@
+# pip equivalent of environment.yml, for readers not using conda.
+# gprMax and openEMS are NOT here: both are built from source and are
+# needed only to regenerate simulation data, not to read the results or
+# run the test suite. See docs/install.md.
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+h5py>=3.10
+scikit-learn>=1.4
+reportlab>=4.0
+pypdf>=4.0
+pillow>=10.0
+pytest>=8.0
