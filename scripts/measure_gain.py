@@ -41,22 +41,27 @@ def main() -> None:
     rows = []
     for f in PROBES:
         th, gain, dmax = pattern(res, f)
-        # Boresight is +x, which is theta = 0 in this cut.
-        j = int(np.argmin(np.abs(th)))
+        # PEAK, not theta = 0. This is an ENDFIRE antenna radiating along +x,
+        # and openEMS measures theta from +z, so theta = 0 is broadside to the
+        # board - a null. Reading it as boresight gave negative gain against a
+        # 12 dBi directivity, which is not physical and is what exposed the
+        # error.
+        j = int(np.argmax(gain))
         rows.append({
             "f_GHz": f / 1e9,
-            "gain_boresight_dBi": float(gain[j]),
+            "gain_peak_dBi": float(gain[j]),
+            "peak_theta_deg": float(th[j]),
             "directivity_dBi": float(dmax),
             "s11_dB": float(np.interp(f, FREQ, db)),
         })
-        print(f"  {f/1e9:5.1f} GHz   boresight {gain[j]:6.2f} dBi   "
-              f"Dmax {dmax:6.2f} dBi   S11 {np.interp(f, FREQ, db):6.2f} dB",
-              flush=True)
+        print(f"  {f/1e9:5.1f} GHz   peak {gain[j]:6.2f} dBi at theta "
+              f"{th[j]:+6.1f} deg   Dmax {dmax:6.2f} dBi   "
+              f"S11 {np.interp(f, FREQ, db):6.2f} dB", flush=True)
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "gain_tapered.json").write_text(json.dumps(rows, indent=2))
 
-    g = [r["gain_boresight_dBi"] for r in rows]
+    g = [r["gain_peak_dBi"] for r in rows]
     lo, hi, _ = bandwidth(FREQ, res["s11"])
     print()
     print(f"  match {lo/1e9:.2f}-{hi/1e9:.2f} GHz")
