@@ -107,7 +107,16 @@ def build_geometry(phantom, grid: GridSpec) -> str:
                              fr.x - fr.kerf / 2, fr.x + fr.kerf / 2))
         else:
             # An oblique cut, approximated by stacked offset slabs.
-            n = max(4, int(np.ceil((z_end - phantom.z_cortex) / grid.dx)))
+            #
+            # floor, not ceil. With ceil each slab is *thinner* than one cell,
+            # and whether it survives snapping to the grid is a rounding
+            # lottery: a 4.11 mm cortex happened to work while 4.21 mm produced
+            # boxes 0.1 mm tall on a 0.2 mm grid, which gprMax rejects for
+            # having its lower coordinate at or above its upper. That cost the
+            # oblique state on two specimens out of four before it was caught.
+            # floor guarantees every slab is at least one cell thick.
+            depth = z_end - phantom.z_cortex
+            n = max(1, int(np.floor(depth / grid.dx)))
             edges = np.linspace(phantom.z_cortex, z_end, n + 1)
             tan = np.tan(np.radians(fr.angle_deg))
             for za, zb in zip(edges[:-1], edges[1:]):
@@ -121,6 +130,22 @@ def build_geometry(phantom, grid: GridSpec) -> str:
         y_c = y_skin - z_c
         lines.append(f"#cylinder: {x_c:.4f} {y_c:.4f} 0 "
                      f"{x_c:.4f} {y_c:.4f} {grid.dx:.4f} {r:.4f} {mat}")
+
+    # Catch sub-cell primitives here, in milliseconds, rather than in the
+    # solver ten minutes into a B-scan. gprMax refuses a box whose coordinates
+    # collapse after snapping, and a deck that fails mid-matrix costs a cell
+    # and is easy to miss among 192 of them.
+    for line in lines:
+        if not line.startswith("#box:"):
+            continue
+        p = line.split()
+        for lo, hi, axis in ((float(p[1]), float(p[4]), "x"),
+                             (float(p[2]), float(p[5]), "y")):
+            if hi - lo < grid.dx - 1e-9:
+                raise ValueError(
+                    f"{line}\n  spans {hi-lo:.4f} m in {axis}, under one "
+                    f"{grid.dx:.4f} m cell. gprMax will reject it once the "
+                    f"coordinates snap to the grid.")
     return "\n".join(lines)
 
 

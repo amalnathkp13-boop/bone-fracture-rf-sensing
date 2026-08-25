@@ -191,3 +191,47 @@ def test_plan_covers_the_requested_span_inclusively():
     p = BScanPlan(x_start=0.020, x_stop=0.080, step=0.001)
     assert p.x.size == 61
     assert p.x[0] == pytest.approx(0.020) and p.x[-1] == pytest.approx(0.080)
+
+
+# --- sub-cell primitives (regression) --------------------------------------
+
+def test_oblique_slabs_are_at_least_one_cell_thick():
+    """Regression: ceil made each slab thinner than a cell.
+
+    Whether such a slab survived snapping to the grid was a rounding lottery.
+    A 4.11 mm cortex happened to work while 4.21 mm produced boxes 0.1 mm tall
+    on a 0.2 mm grid, which gprMax rejects. It cost the oblique state on two
+    specimens out of four before it was caught.
+    """
+    from bonesim.experiment import build_matrix
+    grid = GridSpec(depth=0.060, time_window=2.5e-9)
+    checked = 0
+    for c in build_matrix():
+        if c.state != "oblique":
+            continue
+        boxes = parse_boxes(build_geometry(c.phantom, grid))
+        for mat, _, y0, _, y1 in boxes:
+            if mat == "blood":
+                assert y1 - y0 >= grid.dx - 1e-9, (
+                    f"{c.key}: slab {(y1-y0)*1e3:.4f} mm on a "
+                    f"{grid.dx*1e3:.1f} mm grid")
+                checked += 1
+    assert checked > 100, "expected many oblique slabs to check"
+
+
+def test_every_matrix_cell_builds():
+    """The whole design must survive deck generation, not just a sample."""
+    from bonesim.experiment import build_matrix
+    grid = GridSpec(depth=0.060, time_window=2.5e-9)
+    for c in build_matrix():
+        build_geometry(c.phantom, grid)
+
+
+def test_sub_cell_box_is_rejected_with_a_clear_message():
+    """Fail in milliseconds at build time, not ten minutes into a B-scan."""
+    from bonesim.geometry.phantom import Fracture, Phantom
+    grid = GridSpec()
+    # A kerf far below one cell.
+    p = Phantom().with_fracture(Fracture(0.050, grid.dx / 10))
+    with pytest.raises(ValueError, match="under one"):
+        build_geometry(p, grid)
