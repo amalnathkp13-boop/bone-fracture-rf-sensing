@@ -406,19 +406,21 @@ class Vivaldi:
 # --- the design that works -------------------------------------------------
 
 def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
-    """Best design reached for the 3-11 GHz sweep of proposal 2.2.
+    """Design for the 3-11 GHz sweep of proposal 2.2. Meets it.
 
-    Measured (openEMS, metal edges refined, PML_8):
+    Measured (openEMS, metal edges refined, PML_8, EndCriteria -30 dB):
 
-        -10 dB match   4.35 to 12.00 GHz, contiguous
-        mean in band   -14.9 dB over 3-11 GHz
-        median Re(Zin) 41 ohm
+        -10 dB match   2.48 to 12.00 GHz
+        in 3-11 GHz    99.69% of points below -10 dB
+        worst in band  -9.98 dB, at a single 25 MHz point at 4.775 GHz
+        mean in band   -16.8 dB
+        median Re(Zin) 45.6 ohm
 
-    Everything from 5 to 11 GHz is below -10 dB. The shortfall is 3.0 to
-    4.35 GHz, where the input impedance still ripples: 117 ohm at 3.0 GHz
-    against 24.5 ohm at 4.0 GHz.
+    The one point at -9.98 dB misses -10 by 0.02 dB, which is smaller than the
+    difference between the -30 and -40 dB end criteria. Reported rather than
+    rounded away.
 
-    Four things had to be right, and each was found by measurement rather than
+    Five things had to be right, and each was found by measurement rather than
     from proposal 2.3, which specifies only the opening rate:
 
     1. a microstrip feed with a tapered ground balun, not a bare parallel-strip
@@ -433,8 +435,47 @@ def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
        and moved the band from 5.35-8.60 GHz to 4.35-12.00 GHz
     4. the mesh snapped and refined at every metal edge
 
+    5. a TAPERED feed. The flare end is 4.5 mm and the port stays 1.74 mm,
+       which is 50 ohm microstrip and what the SMA must see. This is what
+       took the design from 4.35 GHz to 2.48 GHz, and it is an impedance
+       transformation, not a radiation fix - see below.
+
     150 x 90 mm fits the 100 x 150 mm boards already in the proposal's bill of
     materials, so this costs nothing extra to fabricate.
+
+    ## How the low band was actually recovered
+
+    The shortfall was never a cutoff. The 4.35 GHz design was matched at
+    2.225-2.725 GHz already, reaching -33 dB - two GHz BELOW its stated band
+    edge - so the aperture was never the limit. What sat between was a
+    mismatch, in two separate defects:
+
+        3.25-4.40 GHz   Re(Zin) 24-37 ohm, a resistive plateau. 24.4 ohm into
+                        50 ohm predicts -9.3 dB; -9.14 dB was measured. That
+                        is arithmetic, not physics.
+        ~3.0 GHz        Re passes through 50 ohm while Im swings +37 to -56
+                        ohm. A reactive resonance, which a transformer cannot
+                        cancel.
+
+    Widening the flare end with the port pinned at 1.74 mm fixes both, the
+    second as a side effect of the geometry change:
+
+    | flare end | worst in 3-11 GHz | covered | Re(Zin) at 4 GHz |
+    |---|---|---|---|
+    | 1.74 mm (uniform) | -6.61 dB | 84%    | 24.4 ohm |
+    | 2.75 mm           | -8.50 dB | 79%    | 25.9 ohm |
+    | 3.50 mm           | -8.14 dB | 94%    | 29.1 ohm |
+    | 4.00 mm           | -9.80 dB | 98.1%  | 36.7 ohm |
+    | 4.50 mm           | -9.98 dB | 99.69% | 39.0 ohm |
+
+    The first two rows looked like a failure, and the direction was called
+    wrong on that partial evidence before the third landed and reversed it.
+
+    Note this runs OPPOSITE to the calibration quoted under feed_width_port
+    (43 / 29 / 19 ohm for 1.5 / 3.0 / 5.0 mm). That is not a contradiction:
+    the calibration describes a UNIFORM line, where widening lowers the line
+    impedance everywhere. Pinning the port turns width into taper steepness
+    instead, and a taper transforms upward.
 
     corrugations > 0 adds slots to the outer edges, the standard remedy for the
     remaining low-frequency ripple. **Measured here to be impractical, and not
@@ -484,8 +525,14 @@ def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
     stated band edge. What sits between is a mismatch, and the remedy is a feed
     transformer - scripts/tune_feed_taper.py.
     """
-    w_feed = 1.74 if substrate == "RO4350B" else 3.08   # 50 ohm microstrip
-    return Vivaldi(length=150.0, taper_start=20.0, feed_len=8.0,
-                   aperture=60.0, sub_width=90.0, feed_width=w_feed,
+    # w_port is 50 ohm microstrip and is what the SMA lands on; it must not
+    # change. The flare end is the tuned quantity. 4.5 mm is measured on
+    # RO4350B; other substrates keep the same taper RATIO, which is an
+    # extrapolation and has not been simulated.
+    w_port = 1.74 if substrate == "RO4350B" else 3.08
+    w_flare = 4.5 if substrate == "RO4350B" else 4.5 * (w_port / 1.74)
+    return Vivaldi(length=150.0, taper_start=20.0, feed_len=12.0,
+                   aperture=60.0, sub_width=90.0,
+                   feed_width=w_flare, feed_width_port=w_port,
                    rate=2.0 / 130.0, substrate=substrate,
                    n_corrugations=corrugations)

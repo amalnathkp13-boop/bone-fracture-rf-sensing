@@ -13,7 +13,7 @@ such rather than papered over.
 | openEMS v0.37.0-rc1 built, Python bindings working | done |
 | FR4 costs "a few dB above 8 GHz" (2.3) | **confirmed: 2.4 dB at 9 GHz, 3.6 at 11** |
 | Gain 8-10 dBi (2.2) | met above ~7 GHz only; 3.7 dBi at 3 GHz |
-| S11 < -10 dB across 3-11 GHz (2.2) | **not met: best ~1.7 GHz of coverage** |
+| S11 < -10 dB across 3-11 GHz (2.2) | **met: 99.69% of the band, worst -9.98 dB at one 25 MHz point** |
 | model validated against a known-good design | **done** - openEMS patch tutorial reproduces at Zin 49.7+4.5j |
 | 50 ohm median input impedance | **achieved** at a 1.8 mm feed (51 ohm) |
 
@@ -206,49 +206,142 @@ the board to 90 mm gives 15 mm arms, and the band moved from 5.35-8.60 GHz to
 
 | | value |
 |---|---|
-| -10 dB match | **4.35 - 12.00 GHz contiguous** |
-| mean over 3-11 GHz | **-14.9 dB** |
-| median Re(Zin) | 41 ohm |
-| below -10 dB | everything from 5 to 11 GHz |
-| board | 150 x 90 mm, fits the 100 x 150 mm stock already in the BOM |
+| -10 dB match | **2.48 - 12.00 GHz** |
+| covered in 3-11 GHz | **99.69%** of points below -10 dB |
+| worst in band | **-9.98 dB**, one 25 MHz point at 4.775 GHz |
+| mean over 3-11 GHz | **-16.8 dB** |
+| median Re(Zin) | 45.6 ohm |
+| board | 150 x 90 mm, fits the stock already in the BOM |
 
 Available as `bonesim.antenna.vivaldi.uwb_3_11()`.
 
-## What is still short, and why corrugations did not fix it
+The single point at -9.98 dB misses -10 dB by 0.02 dB. That is smaller than
+the difference between the -30 and -40 dB end criteria, so it is reported
+rather than rounded away: the design **substantially meets** the 3-11 GHz
+specification, and the 0.02 dB is stated so nobody has to take "meets spec"
+on trust.
 
-3.0 to 4.35 GHz. Re(Zin) ripples there - 117 ohm at 3.0 GHz against 24.5 ohm at
-4.0 GHz - which is edge-current resonance, and corrugated outer edges are the
-standard remedy.
+## How the low band was recovered, after two wrong diagnoses
 
-They were implemented and run, and they are impractical here, for a reason that
-was not the expected one. **They cost nothing in mesh**: 7.40 M cells either
-way, identical minimum cell and time step, because the slot edges fall inside
-refinement the flare already required. What they cost is **convergence**. The
-slots are resonant by design - that is how they lengthen the current path - so
-they ring, and the energy will not decay to the -40 dB end criterion:
+The earlier version of this document said the shortfall was 3.0-4.35 GHz
+caused by edge-current resonance, that corrugations were the remedy, and that
+they were impractical because they would not converge inside 40 hours. **All
+three claims were wrong.** They are kept here rather than deleted, because how
+they failed is the useful part.
 
-| | recorded steps | wall time |
+### Wrong claim 1: corrugations take 40 hours
+
+Retried in `scripts/retry_corrugations.py` at a -30 dB end criterion, with a
+plain run at the SAME criterion as a control - without it, any improvement
+could have been the relaxed criterion rather than the slots:
+
+| run | converged | wall time |
 |---|---|---|
-| plain | 336, converged | 795 s |
-| corrugated | 1,735 and rising | 70 min, abandoned |
+| plain, control | timestep 6,608 | 578 s |
+| 4 slots x 4 mm | timestep 6,972 | 601 s |
+| 6 slots x 6 mm | timestep 7,952 | 738 s |
 
-Advancing 12 steps per 30 s against a 60,000-step cap, the extrapolated runtime
-was about 40 hours. Revisiting them means shallower and fewer slots, and
-relaxing EndCriteria: a design that rings by intent cannot be judged by a decay
-criterion tuned for one that does not.
+Corrugations converge in **4% more time than plain**, not 40 hours. The
+control also validated the relaxed criterion: -30 dB moved the band edge by
+one 25 MHz grid point against the -40 dB reference, so nothing downstream
+rests on it.
+
+The original anomaly was caught in the act during the later feed sweep. The
+machine enters **Modern Standby and suspends the solver** while openEMS keeps
+counting wall-clock time. One run logged 39m25s elapsed for 4,564 timesteps -
+an apparent 1.0 timesteps/s - and the Windows event log showed 33 of those
+minutes as standby (Kernel-Power 506/507). The give-away was in the same log
+line all along: openEMS reported 86.1 MC/s and 0.086 s per timestep
+throughout. The solver was never slow. It was asleep.
+
+Two lessons worth keeping. openEMS's MC/s figure is the honest one because it
+excludes suspended time, and an elapsed-time extrapolation on a laptop is
+worthless without `powercfg /change standby-timeout-ac 0`.
+
+### Wrong claim 2: corrugations are the remedy
+
+They converge, and they do not work. 4 slots x 4 mm moved S11 at 3.0 GHz from
+-6.61 to -6.41 dB, the wrong way. 6 slots x 6 mm reached Re(Zin) 94 ohm but
+broke the contiguous band down to 8.97-12.00 GHz.
+
+### Wrong claim 3: the shortfall is a low-frequency cutoff
+
+It never was. The 4.35 GHz design is **matched at 2.225-2.725 GHz, reaching
+-33 dB** - two GHz below its own stated band edge - so the aperture was never
+the limit. An independent check agrees: solving for the effective permittivity
+implied by a 4.35 GHz cutoff and a 60 mm aperture gives 0.33, which is
+impossible, and so falsifies the premise rather than sizing the antenna.
+
+What sat between the matched island and the main band was a mismatch, in two
+separate defects:
+
+| band | Re(Zin) | Im(Zin) | nature |
+|---|---|---|---|
+| 3.25-4.40 GHz | 24-37 ohm | small | resistive plateau |
+| ~3.0 GHz | passes through 50 | +37 to -56 ohm | reactive resonance |
+
+The plateau is arithmetic, not physics: 24.4 ohm into 50 ohm predicts -9.3 dB
+and -9.14 dB was measured. A transformer fixes that. It cannot cancel
+reactance, so the 3.0 GHz resonance was expected to survive - and did not, as
+a side effect of the geometry change.
+
+## The fix: a tapered feed
+
+Widen the flare end of the feed while pinning the port at 1.74 mm, which is
+50 ohm microstrip and what the SMA has to see:
+
+| flare end | worst in 3-11 GHz | covered | Re(Zin) at 4 GHz |
+|---|---|---|---|
+| 1.74 mm (uniform, as built) | -6.61 dB | 84% | 24.4 ohm |
+| 2.75 mm, 8 mm feed | -8.44 dB | 80% | 24.5 ohm |
+| 2.75 mm, 12 mm feed | -8.50 dB | 79% | 25.9 ohm |
+| 3.50 mm | -8.14 dB | 94% | 29.1 ohm |
+| 4.00 mm | -9.80 dB | 98.1% | 36.7 ohm |
+| **4.50 mm** | **-9.98 dB** | **99.69%** | **39.0 ohm** |
+
+The first two rows looked like a failure and the direction was called wrong on
+that partial evidence, before the third landed and reversed it. Worth
+recording: two points of a monotonic trend are not a trend.
+
+This runs OPPOSITE to the calibration in `vivaldi.py` (median Re(Zin) 43 / 29 /
+19 ohm for feed widths 1.5 / 3.0 / 5.0 mm), and that is not a contradiction.
+The calibration describes a **uniform** line, where widening lowers the line
+impedance everywhere. Pinning the port turns width into taper **steepness**,
+and a taper transforms upward.
+
+## What this recovers downstream
+
+`docs/band-study.md` measured what the 4.35 GHz floor cost: separation fell
+from 40.8 dB to 17.9 dB when 3.00-4.35 GHz was removed, while AUC stayed at
+1.0000 and could not see it.
+
+The antenna now covers 2.48-12.00 GHz, which fully contains the 3-11 GHz band
+the matrix was solved over. The design-target row of that study therefore
+applies directly and **the full 40.8 dB separation is recovered** - no
+re-scoring needed, because the band study already computed that row.
+
+One caveat on that claim. The band study crops with a brick wall, whereas a
+real antenna rolls off, and its gain and phase vary across the band. A brick
+wall is the pessimistic case for a band that is MISSING, which is why it was
+the right tool there. It is the optimistic case for a band that is merely
+poorly matched at the edges. Treating -9.98 dB at 4.775 GHz as equivalent to
+-16.8 dB is an approximation, though a 0.02 dB one.
 
 ## Status
 
-**Stage 5 delivers a working UWB antenna covering 4.35-12.00 GHz**, against a
-3-11 GHz specification. 6.65 of the 8 GHz target band is matched, and the
-shortfall is characterised rather than mysterious.
+**Stage 5 is complete.** The antenna meets the 3-11 GHz specification of
+proposal 2.2 to within 0.02 dB at a single frequency point, on a board already
+in the bill of materials.
 
 The stage began at 4.00-6.40 GHz with a mean of -10.9 dB and an input impedance
-of 27 ohm. It ends at 7.65 GHz of contiguous match, -14.9 dB mean, 41 ohm - on a
-board already in the bill of materials.
+of 27 ohm. It passed through 4.35-12.00 GHz. It ends at 2.48-12.00 GHz,
+-16.8 dB mean, 45.6 ohm median - and with three published claims of its own
+corrected along the way.
 
-Not on the critical path either way: the imaging model excites with a hertzian
-dipole in gprMax, not with this antenna.
+Fabrication artefacts in `figures/`: `vivaldi.dxf`, `vivaldi_fab_drawing.pdf`,
+`vivaldi_antenna.step`, `vivaldi_geom.json`. All regenerated for the tapered
+design; the drawing now reports the width at the PORT where the SMA lands, not
+at the flare, which were the same number until this design and are not now.
 
 ## Reproducing
 

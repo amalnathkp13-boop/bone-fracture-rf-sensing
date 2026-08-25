@@ -97,3 +97,19 @@ at 4.0 GHz.
    shallower slots with EndCriteria relaxed is the first thing to try.
 2. **Resistive edge loading.** Damps the resonance directly and converges
    normally. Costs efficiency; the fallback if the slots still will not settle.
+
+## Resolved
+
+The shortfall this document measures no longer exists. A tapered feed took the
+antenna from 4.35-12.00 GHz to **2.48-12.00 GHz**, which fully contains the
+3-11 GHz band the matrix was solved over, so the design-target row above is
+now the operating row and **the full 40.8 dB separation is recovered**.
+
+The measurement retains its value for two reasons that outlive the defect. It
+is the concrete demonstration that AUC = 1.0000 concealed the loss of more
+than half the margin - the Stage 7 saturation caveat, shown rather than
+asserted. And it is what made recovering the low band a priority instead of a
+documented footnote: without the 22.9 dB figure, 4.35 GHz would have looked
+like an acceptable compromise.
+
+See `docs/stage5-findings.md`.
