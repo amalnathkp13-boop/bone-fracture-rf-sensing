@@ -15,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -480,13 +481,189 @@ def stage7():
            "separation, envelope, and worst case")
 
 
+# --------------------------------------------------------- phantom in 3D ---
+
+# Tissue colours. Chosen to read as anatomy rather than to be decorative:
+# skin and muscle warm, fat pale, bone near-white, marrow darker inside it.
+TISSUE_RGB = {
+    "skin_dry": "#c98b6b",
+    "skin_wet": "#c98b6b",
+    "fat": "#f2e2b6",
+    "muscle": "#b5423f",
+    "cortical_bone": "#efeae0",
+    "cortical_bone_wet": "#efeae0",
+    "marrow": "#d9b48a",
+    "blood": "#8c1c13",
+}
+TISSUE_LABEL = {
+    "skin_dry": "skin", "skin_wet": "skin", "fat": "fat", "muscle": "muscle",
+    "cortical_bone": "cortical bone", "cortical_bone_wet": "cortical bone",
+    "marrow": "marrow", "blood": "blood-filled fracture",
+}
+
+
+def _box(ax, x0, x1, y0, y1, z0, z1, color, alpha=1.0, lw=0.3,
+         edge="#33333355"):
+    """One axis-aligned box. Depth is plotted downward, so z is negated."""
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    a, b = -z1, -z0                       # skin at the top of the plot
+    v = [(x0, y0, a), (x1, y0, a), (x1, y1, a), (x0, y1, a),
+         (x0, y0, b), (x1, y0, b), (x1, y1, b), (x0, y1, b)]
+    faces = [[v[0], v[1], v[2], v[3]], [v[4], v[5], v[6], v[7]],
+             [v[0], v[1], v[5], v[4]], [v[2], v[3], v[7], v[6]],
+             [v[1], v[2], v[6], v[5]], [v[0], v[3], v[7], v[4]]]
+    ax.add_collection3d(Poly3DCollection(
+        faces, facecolors=color, edgecolors=edge, linewidths=lw,
+        alpha=alpha, zsort="max"))
+
+
+def _tidy(ax, xlim, ylim, zlim, elev=22, azim=-58):
+    ax.set_xlim(*xlim); ax.set_ylim(*ylim); ax.set_zlim(*zlim)
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_box_aspect((3.0, 1.5, 2.0), zoom=1.28)
+    for pane in (ax.xaxis, ax.yaxis, ax.zaxis):
+        pane.pane.set_visible(False)
+        pane._axinfo["grid"]["linewidth"] = 0.0
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.tick_params(labelsize=7, colors="#444")
+
+
+def stage_phantom3d():
+    """The phantom and the specimen population, in three dimensions.
+
+    The simulation is 2D TMz, so what is drawn is the modelled slice given a
+    finite width - an honest picture of what was solved, not a cylindrical
+    limb that would imply out-of-plane physics the model does not contain.
+
+    All annotation uses text2D in axes coordinates. Text placed in data
+    coordinates on a 3D axis is clipped at the axis limits, which silently
+    truncated half the layer labels in the first version of this figure.
+    """
+    from bonesim.geometry.phantom import Fracture, Phantom
+    from bonesim.perturb.errors import SpecimenVariation
+
+    nl = chr(10)   # heredoc-safe newline
+    W, L = 40.0, 100.0             # drawn width and length of the slice, mm
+    base = Phantom().with_overlay(0.006)
+    sv = SpecimenVariation()
+
+    fig = plt.figure(figsize=(13.0, 10.6))
+    gs = fig.add_gridspec(3, 4, height_ratios=[1.25, 1.0, 1.0],
+                          hspace=0.13, wspace=0.02,
+                          left=0.02, right=0.98, top=0.90,
+                          bottom=0.01)
+
+    # ---- (a) exploded layer stack -------------------------------------
+    ax = fig.add_subplot(gs[0, :2], projection="3d")
+    ph = sv.draw(base, 0)
+    gap, off, rows = 3.4, 0.0, []
+    for mat, z0, z1 in ph.stack():
+        t = (z1 - z0) * 1e3
+        _box(ax, 0, L, 0, W, off, off + t, TISSUE_RGB[mat], alpha=0.97)
+        rows.append((TISSUE_LABEL[mat], t, TISSUE_RGB[mat]))
+        off += t + gap
+    _tidy(ax, (0, L), (0, W), (-off, 4))
+    ax.set_zticks([])
+    for i, (lab, t, c) in enumerate(rows):
+        y = 0.90 - i * 0.115
+        ax.text2D(0.63, y, "■", transform=ax.transAxes, color=c,
+                  fontsize=13, va="center", zorder=20,
+                  path_effects=[pe.withStroke(linewidth=0.8,
+                                              foreground="#555")])
+        ax.text2D(0.68, y, f"{lab}   {t:.1f} mm", transform=ax.transAxes,
+                  fontsize=8.2, color="#222", va="center",
+                  zorder=20)
+    ax.text2D(0.63, 0.14, f"slice drawn {L:.0f} × {W:.0f} mm{nl}"
+              f"(the 2D TMz plane, given a width)",
+              transform=ax.transAxes, fontsize=7.4, color="#666",
+              zorder=20, linespacing=1.5)
+
+    # ---- (b) cutaway with the fracture --------------------------------
+    ax = fig.add_subplot(gs[0, 2:], projection="3d")
+    ph = sv.draw(base, 0).with_fracture(Fracture(0.050, 0.001))
+    cut = W * 0.52
+    xf = ph.fracture.x * 1e3
+    # Drawn 3 mm wide. The modelled kerf is 0.2-2.0 mm and would be a hairline
+    # at this scale; the caption states the true width so the exaggeration
+    # cannot be mistaken for the geometry that was solved.
+    kerf = 3.0
+    z_ct = ph.z_cortex * 1e3
+    for mat, z0, z1 in ph.stack():
+        a, b = z0 * 1e3, z1 * 1e3
+        if mat == "cortical_bone" and a < z_ct + 0.1:
+            _box(ax, 0, xf - kerf / 2, 0, cut, a, b, TISSUE_RGB[mat])
+            _box(ax, xf + kerf / 2, L, 0, cut, a, b, TISSUE_RGB[mat])
+            _box(ax, xf - kerf / 2, xf + kerf / 2, 0, cut, a, b,
+                 TISSUE_RGB["blood"], edge="#5a0d09")
+        else:
+            _box(ax, 0, L, 0, cut, a, b, TISSUE_RGB[mat])
+    _box(ax, xf - 30, xf + 30, cut * 0.25, cut * 0.75,
+         -ph.standoff * 1e3 - 1.5, -ph.standoff * 1e3, "#2b2b2b")
+    _tidy(ax, (0, L), (0, W), (-(ph.z_far_cortex + ph.cortex) * 1e3 - 2,
+                               ph.standoff * 1e3 + 3))
+    ax.set_zticks([])
+    ax.annotate("antenna, 12 mm standoff", xy=(0.52, 0.72),
+                xytext=(0.02, 0.60), xycoords="axes fraction",
+                textcoords="axes fraction", fontsize=8.2, color="#222", zorder=20,
+                arrowprops=dict(arrowstyle="->", lw=0.9, color="#444"))
+    ax.annotate("blood-filled fracture\nin the near cortex", xy=(0.470, 0.40),
+                xytext=(0.56, 0.18), xycoords="axes fraction",
+                textcoords="axes fraction", fontsize=8.4, color=TISSUE_RGB["blood"],
+                ha="left", zorder=20,
+                arrowprops=dict(arrowstyle="->", lw=1.1,
+                                color=TISSUE_RGB["blood"]))
+
+    # ---- (c) the eight specimens, one axis each -----------------------
+    for s in range(8):
+        r, c = divmod(s, 4)
+        ax = fig.add_subplot(gs[1 + r, c], projection="3d")
+        p = sv.draw(base, s)
+        for mat, z0, z1 in p.stack():
+            _box(ax, 0, L, 0, W, z0 * 1e3, z1 * 1e3, TISSUE_RGB[mat],
+                 alpha=0.97, lw=0.25)
+        deep = (p.z_far_cortex + p.cortex) * 1e3
+        _tidy(ax, (0, L), (0, W), (-30, 2), elev=20, azim=-62)
+        ax.set_zticks([])
+        ax.text2D(0.04, 0.96, f"S{s}", transform=ax.transAxes, fontsize=10,
+                  fontweight="bold", color="#222", zorder=20)
+        ax.text2D(0.06, 0.83,
+                  f"cortex {p.cortex*1e3:.2f} mm\n"
+                  f"overlay {p.overlay*1e3:.2f} mm\n"
+                  f"depth {deep:.1f} mm",
+                  transform=ax.transAxes, fontsize=7.4, color="#555",
+                  va="top", linespacing=1.5, zorder=20)
+
+    handles = [plt.Rectangle((0, 0), 1, 1, fc=TISSUE_RGB[k], ec="#333",
+                             lw=0.4) for k in
+               ("skin_dry", "fat", "muscle", "cortical_bone", "marrow",
+                "blood")]
+    fig.legend(handles, ["skin", "fat", "muscle", "cortical bone", "marrow",
+                         "blood-filled fracture"],
+               loc="upper center", ncol=6, fontsize=9, frameon=False,
+               bbox_to_anchor=(0.5, 0.995))
+    fig.text(0.04, 0.945, "(a) layer stack, exploded", fontsize=11,
+             fontweight="bold", color="#222", va="top")
+    fig.text(0.52, 0.945, "(b) cutaway: fracture in the near cortex",
+             fontsize=11, fontweight="bold", color="#222", va="top")
+    fig.text(0.04, 0.618, "(c) the eight specimens: cortical wall "
+             "thickness and soft-tissue overlay both vary", fontsize=11,
+             fontweight="bold", color="#222", va="top")
+    F.save(fig, "phantom_3d",
+           "modelled slice in 3D and the specimen population")
+
+
 STAGES = {0: stage0, 1: stage1, 2: stage2, 3: stage3,
-          4: stage4, 5: stage5, 6: stage6, 7: stage7}
+          4: stage4, 5: stage5, 6: stage6, 7: stage7,
+          "phantom": stage_phantom3d}
 
 
 def main() -> int:
     F.use_style()
-    want = [int(a) for a in sys.argv[1:]] or sorted(STAGES)
+    # Keys are mostly stage numbers but not all of them, so sorted(STAGES)
+    # would compare int against str and the int() cast would reject a named
+    # figure. Dict order is the definition order, which is the order to build.
+    want = ([int(a) if a.isdigit() else a for a in sys.argv[1:]]
+            or list(STAGES))
     print(f"writing to {F.FIGDIR}\n")
     for s in want:
         print(f"stage {s}")
