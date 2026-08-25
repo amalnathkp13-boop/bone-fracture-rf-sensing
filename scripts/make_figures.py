@@ -358,8 +358,14 @@ def stage5():
 
 def stage6():
     """The matrix so far: detection against overlay."""
-    cells = sorted(RUNS.glob("matrix/*.npz")) + sorted(
-        RUNS.glob("matrix_colab/*.npz"))
+    # Dedupe by stem. Two cells were solved locally before the matrix moved to
+    # Colab and exist in both directories; concatenating the globs counted them
+    # twice, which showed up as "194 of 192" in the caption and, worse, plotted
+    # those two intact points twice. Later entries win, matching the precedence
+    # in run_stage7.py so both read the same cell for a duplicated stem.
+    cells = sorted({p.stem: p for p in
+                    sorted(RUNS.glob("matrix_colab/*.npz"))
+                    + sorted(RUNS.glob("matrix/*.npz"))}.values())
     if len(cells) < 4:
         print(f"  stage 6: only {len(cells)} cells available, skipped")
         return
