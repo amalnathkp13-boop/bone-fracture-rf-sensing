@@ -11,11 +11,16 @@ curves, every CAM tool and every PCB house imports it, and the fab converts to
 Gerber with their own rules. The curves here are the ones openEMS simulated, not
 a redrawing, so nothing is lost in translation.
 
-Connector pads are deliberately NOT drawn. An end-launch SMA footprint depends
-on the exact part - clamp or screw-down, board thickness, pin diameter - and
-inventing one would be fabricating a specification. What is provided is the
-launch reference: trace width, its position, and the ground condition at the
-edge, which is what the connector datasheet needs matched.
+Connector pads are not drawn because none are needed. An end-launch SMA lands
+its centre pin on the trace at the board edge and grounds its body to the plane
+on the opposite face; this board already presents both, so the launch is the
+board as drawn. Two parts were checked against their datasheets and named on the
+drawing - one solder, one solderless clamp - both suiting the 0.762 mm board,
+which matters because most end-launch parts are cut for 0.062 in.
+
+The one variant that *would* need pads is a top-ground-tab type. That is called
+out as something to avoid rather than accommodated, because copper flanking the
+feed changes the launch and this design was validated without it.
 """
 from __future__ import annotations
 
@@ -105,7 +110,7 @@ def drawing(ant) -> Path:
     pdf_path = OUT / "vivaldi_fab_drawing.pdf"
     with PdfPages(pdf_path) as pdf:
         fig = plt.figure(figsize=(11.7, 8.3))          # A4 landscape
-        gs = fig.add_gridspec(3, 2, height_ratios=[3, 3, 1.5],
+        gs = fig.add_gridspec(3, 2, height_ratios=[2.6, 2.6, 2.4],
                               hspace=0.32, wspace=0.14)
 
         for row, (pts, name, col) in enumerate((
@@ -144,10 +149,10 @@ def drawing(ant) -> Path:
                      f"{ant.taper_length:.0f}", off=-9)
                 # Staggered: the microstrip and balun sections are 8 and
                 # 12 mm wide, too narrow for their labels side by side.
-                for xc, lab, dy in ((ant.feed_len / 2, "microstrip", -19),
+                for xc, lab, dy in ((ant.feed_len / 2, "microstrip", -18),
                                     ((ant.feed_len + ant.taper_start) / 2,
-                                     "balun", -25),
-                                    ((ant.taper_start + L) / 2, "flare", -19)):
+                                     "balun", -27),
+                                    ((ant.taper_start + L) / 2, "flare", -18)):
                     ax.text(xc, -W / 2 + dy, lab, ha="center", va="top",
                             fontsize=7, color="#0072B2")
                 ax.annotate(f"trace {ant.feed_width:.2f} wide,\ncentred on axis",
@@ -159,7 +164,7 @@ def drawing(ant) -> Path:
             else:
                 ax.annotate("ground tapers to the strip\n(elliptical balun)",
                             xy=((ant.feed_len + ant.taper_start) / 2, 30),
-                            xytext=(40, 52), fontsize=7,
+                            xytext=(48, 40), fontsize=7,
                             arrowprops=dict(arrowstyle="->", lw=0.8))
                 ax.annotate(f"2 x M{HOLE_D-0.2:.0f} clearance"
                             f" {HOLE_D:.1f} dia, NPTH\n"
@@ -187,20 +192,39 @@ def drawing(ant) -> Path:
             f"(Re(Zin) ripples 117 ohm at 3.0 GHz vs 24.5 at 4.0).\n"
             f"   Etch this knowing the low-band gap is there.\n"
             f"\n"
-            f"CONNECTOR: end-launch SMA on the x=0 edge, centre pin on the "
-            f"{ant.feed_width:.2f} mm trace at y=0, body grounding to the "
-            f"full-width ground plane.\n"
-            f"   No connector pads are drawn — the footprint depends on the "
-            f"exact part (clamp vs screw-down, pin diameter, board\n"
-            f"   thickness). Match the datasheet to the trace width and the "
-            f"{h:.3f} mm board. Note this is a thin board; confirm the\n"
-            f"   connector is rated for 0.030 in, not the more common "
-            f"0.062 in.\n"
+            f"CONNECTOR - qualified parts. Both were checked against their "
+            f"datasheets and both suit this {h:.3f} mm (0.030 in) board:\n"
+            f"   L-com RFPCB-SMA-FS18G-55   DC-18 GHz, specified for a "
+            f"0.031 in board, 0.020 in pin, solder, 50 ohm, VSWR 1.2:1\n"
+            f"   Southwest 292-04A-9        DC-27 GHz, up to 0.065 in board, "
+            f"0.010 in pin / 0.0635 in dielectric, SOLDERLESS clamp\n"
+            f"   The BOM asks for 18 GHz end-launch and warns off cheap 6 GHz "
+            f"parts. Either of these meets that.\n"
+            f"\n"
+            f"   NO EXTRA PADS ARE NEEDED. An end-launch lands its centre pin "
+            f"on the trace at the board edge and grounds its body to\n"
+            f"   the plane on the opposite face. This board already presents "
+            f"both: the {ant.feed_width:.2f} mm trace runs to x=0 and the "
+            f"ground is\n"
+            f"   full width there. The solderless part needs no soldering to "
+            f"the board at all.\n"
+            f"\n"
+            f"   The trace width is a good match rather than luck: "
+            f"{ant.feed_width:.2f} mm against the 0.0635 in (1.61 mm) "
+            f"dielectric diameter of\n"
+            f"   the Southwest part - within 8 percent. A launch behaves best "
+            f"when the trace is close to the connector dielectric.\n"
+            f"\n"
+            f"   A variant with ground tabs on the TOP face would want two "
+            f"pads flanking the trace. Those are NOT drawn and NOT in\n"
+            f"   the simulated model: copper beside the feed changes the "
+            f"launch, and this design was validated without it. Prefer\n"
+            f"   a bottom-ground or clamp part.\n"
             f"\n"
             f"DXF layers: BOARD_OUTLINE, COPPER_TOP, COPPER_BOTTOM, DRILL. "
             f"Units mm. Origin at the feed edge, y=0 on the antenna axis."
         )
-        ax.text(0.0, 1.0, notes, va="top", ha="left", fontsize=7.4,
+        ax.text(0.0, 1.0, notes, va="top", ha="left", fontsize=6.6,
                 family="monospace", transform=ax.transAxes)
 
         pdf.savefig(fig)
