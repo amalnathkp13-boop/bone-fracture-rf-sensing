@@ -298,6 +298,7 @@ def stage4():
 def stage5():
     """The antenna: geometry, and how far the match got."""
     from bonesim.antenna.vivaldi import Vivaldi, uwb_3_11
+    nl = chr(10)   # heredoc-safe newline
 
     p = RUNS / "fig_stage5.npz"
     fig, ax = plt.subplots(1, 2, figsize=(10.6, 3.8),
@@ -319,26 +320,38 @@ def stage5():
     ax[0].legend(loc="lower right")
     F.annotate(ax[0], "dotted: microstrip → balun → flare", "upper left")
 
-    if p.exists():
-        z = np.load(p)
-        f, s11 = z["f"], z["s11"]
-        db = 20 * np.log10(np.abs(s11))
-        ax[1].plot(f / 1e9, db, color=F.BLUE)
-        ax[1].axhline(-10, color=F.RED, ls="--", lw=1.1)
+    # Both curves come from the same solver settings (-30 dB end criterion),
+    # so the comparison is like for like rather than old-run against new.
+    base = RUNS / "corrugations" / "plain_e3_s11.npz"
+    tap = RUNS / "feedtaper" / "w450_l12_s11.npz"
+    if base.exists() and tap.exists():
+        zb, zt = np.load(base), np.load(tap)
+        f = zb["f"] / 1e9
+        dbb = 20 * np.log10(np.abs(zb["s11"]))
+        dbt = 20 * np.log10(np.abs(zt["s11"]))
         ax[1].axvspan(3, 11, color=F.GREEN, alpha=0.10)
-        ax[1].axvspan(3, 4.35, color=F.RED, alpha=0.12)
+        # Shade what the taper recovered: matched now, not matched before.
+        gained = (dbt <= -10) & (dbb > -10)
+        ax[1].fill_between(f, -40, 0, where=gained, color=F.ORANGE,
+                           alpha=0.22, step="mid")
+        ax[1].plot(f, dbb, color=F.GREY, lw=1.1,
+                   label="uniform 1.74 mm feed")
+        ax[1].plot(f, dbt, color=F.BLUE, lw=1.5,
+                   label="tapered 4.5 to 1.74 mm")
+        ax[1].axhline(-10, color=F.RED, ls="--", lw=1.1)
         ax[1].set_xlabel("frequency (GHz)")
         ax[1].set_ylabel("|S11| (dB)")
         ax[1].set_ylim(-40, 0)
         ax[1].set_xlim(2, 12)
-        ax[1].set_title("(b) match: 4.35 – 12.00 GHz")
-        band = (f >= 3e9) & (f <= 11e9)
-        F.annotate(ax[1], f"green = 3–11 GHz target\n"
-                          f"red = the shortfall\n"
-                          f"mean in band {db[band].mean():.1f} dB",
-                   "lower right")
+        ax[1].set_title("(b) match: 2.48 to 12.00 GHz")
+        ax[1].legend(loc="lower left", fontsize=7)
+        band = (zb["f"] >= 3e9) & (zb["f"] <= 11e9)
+        F.annotate(ax[1], f"green = 3-11 GHz target{nl}"
+                          f"orange = recovered by the taper{nl}"
+                          f"covered {(dbt[band] <= -10).mean()*100:.1f}%, worst {dbt[band].max():.2f} dB",
+                   "upper right")
     F.save(fig, "stage5_antenna",
-           "working UWB antenna, with its 3–4.35 GHz shortfall shown")
+           "the taper recovers 2.48-4.35 GHz; worst in band -9.98 dB")
 
 
 # --------------------------------------------------------------- stage 6 ---
