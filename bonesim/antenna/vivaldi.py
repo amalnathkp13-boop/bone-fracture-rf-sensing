@@ -456,11 +456,22 @@ def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
     | 4 slots x 4 mm | timestep 6,972 | 601 s |
     | 6 slots x 6 mm | timestep 7,952 | 738 s |
 
-    Corrugations converge in 4% more time than plain, not 40 hours. The
-    original run advanced at 0.4 timesteps/s where this machine does 11 on the
-    identical mesh, so it was starved of CPU, not ringing. A 28x speed anomaly
-    should have been read as a broken run rather than a property of the
-    geometry.
+    Corrugations converge in 4% more time than plain, not 40 hours.
+
+    The cause of the original anomaly was found while running the feed-taper
+    sweep, because it happened again and was caught in the act: the machine
+    enters Modern Standby and SUSPENDS the solver, while openEMS keeps counting
+    wall-clock time. One taper run logged 39m25s elapsed for 4,564 timesteps,
+    an apparent 1.0 timesteps/s - and the Windows event log showed 33 of those
+    minutes were standby (Kernel-Power 506/507). The give-away is in the same
+    log line: openEMS reported 86.1 MC/s and 0.086 s per timestep throughout.
+    The solver was never slow. It was asleep.
+
+    So "0.4 timesteps/s over 70 minutes, extrapolating to 40 hours" measured
+    how long the laptop stayed awake, not how long the antenna needs. Two
+    lessons worth keeping: openEMS's own MC/s figure is the honest one because
+    it excludes suspended time, and an elapsed-time extrapolation on a laptop
+    is worthless without `powercfg /change standby-timeout-ac 0`.
 
     They are still not the fix, but now for a measured reason rather than an
     abandoned one. 4 slots x 4 mm moves S11 at 3.0 GHz from -6.61 to -6.41 dB -
