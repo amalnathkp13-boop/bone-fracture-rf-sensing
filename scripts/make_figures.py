@@ -395,8 +395,74 @@ def stage6():
            f"{len(cells)} of 192 acquisitions")
 
 
+def stage7():
+    """The statistical result: separation, envelope, and the saturation."""
+    import csv
+    from bonesim.stats.analysis import auc, roc_curve
+    nl = chr(10)   # heredoc-safe newline for the annotations
+
+    cache = RUNS / "stage7_scores.csv"
+    if not cache.exists():
+        print("  stage 7: run scripts/run_stage7.py first, skipped")
+        return
+    rows = list(csv.reader(open(cache)))[1:]
+    sc = np.array([float(r[6]) for r in rows])
+    fr = np.array([r[4] == "True" for r in rows])
+    ov = np.array([float(r[2]) for r in rows])
+    kf = np.array([float(r[3]) for r in rows])
+
+    fig, ax = plt.subplots(1, 3, figsize=(11.5, 3.5))
+
+    # (a) the distributions, which is what a perfect AUC actually means
+    bins = np.linspace(0, 110, 45)
+    ax[0].hist(sc[~fr], bins=bins, color=F.BLUE, alpha=0.85, label="intact")
+    ax[0].hist(sc[fr], bins=bins, color=F.RED, alpha=0.85, label="fractured")
+    ax[0].axvspan(sc[~fr].max(), sc[fr].min(), color=F.GREY, alpha=0.18)
+    ax[0].set_xlabel("detector score (dB)")
+    ax[0].set_ylabel("count")
+    ax[0].set_title("(a) the classes do not overlap")
+    ax[0].legend(loc="upper center")
+    F.annotate(ax[0], f"gap {sc[fr].min()-sc[~fr].max():.0f} dB{nl}"
+                      f"AUC = 1.000 is a lower{nl}bound, not a measurement",
+               "upper right")
+
+    # (b) score against overlay, both classes
+    for lab, mask, col, mk in (("fractured", fr, F.RED, "o"),
+                               ("intact", ~fr, F.BLUE, "s")):
+        xs = sorted(set(ov))
+        mean = [sc[mask & (ov == o)].mean() for o in xs]
+        sd = [sc[mask & (ov == o)].std() for o in xs]
+        ax[1].errorbar([o*1e3 for o in xs], mean, yerr=sd, fmt=mk + "-",
+                       color=col, ms=5, capsize=3, label=lab)
+    ax[1].set_xlabel("soft-tissue overlay (mm)")
+    ax[1].set_ylabel("detector score (dB)")
+    ax[1].set_title("(b) the clinical envelope")
+    ax[1].legend()
+    F.annotate(ax[1], f"the control rises with overlay;{nl}the margin"
+                      f"{nl}narrows but never closes", "lower right")
+
+    # (c) score against kerf, at the hardest overlay
+    hard = ov == 0.010
+    ax[2].axhline(sc[~fr & hard].max(), color=F.BLUE, ls="--", lw=1.2,
+                  label="worst intact, 10 mm")
+    ks = sorted(set(kf[fr]))
+    ax[2].plot([k*1e3 for k in ks],
+               [sc[fr & hard & (kf == k)].min() for k in ks],
+               "o-", color=F.RED, ms=5, label="weakest fractured, 10 mm")
+    ax[2].set_xscale("log")
+    ax[2].set_xlabel("fracture width (mm)")
+    ax[2].set_ylabel("detector score (dB)")
+    ax[2].set_title("(c) worst case at the thickest overlay")
+    ax[2].legend(loc="center right")
+    F.annotate(ax[2], f"even the smallest kerf the grid{nl}can represent,{nl}"
+                      f"under the thickest overlay,{nl}clears every intact limb",
+               "lower left")
+    F.save(fig, "stage7_statistics",
+           "separation, envelope, and worst case")
+
+
 STAGES = {0: stage0, 1: stage1, 2: stage2, 3: stage3,
-          4: stage4, 5: stage5, 6: stage6}
+          4: stage4, 5: stage5, 6: stage6, 7: stage7}
 
 
 def main() -> int:
