@@ -91,8 +91,8 @@ seconds and only then spend FDTD hours on it.
 | 3 | gprMax geometry builder and B-scan driver | **complete** |
 | 4 | Brass-rod validation gate (proposal §9) | **complete** |
 | 5 | Antipodal Vivaldi characterisation in openEMS | **partial** — see `docs/stage5-findings.md` |
-| 6 | full 192-cell matrix | **done** | 192/192 solved on Colab T4, `runs/matrix_colab/` |
-| 7 | statistics, proposal §5 | **done** | AUC 1.000 (CI 1.000-1.000), p=0.001, LOSO acc 0.998, ICC 0.998 |
+| 6 | Full 192-cell experiment matrix (8 specimens) | **complete** — 192/192 on Colab T4 |
+| 7 | Statistical analysis plan (proposal §5) | **complete** — see `docs/stage7-findings.md` |
 
 Stage 4 is the go/no-go. If migration cannot image a 6 mm PEC rod at 20 mm depth in
 phantom, nothing downstream is meaningful — this mirrors the week-6 gate in §9 of the
