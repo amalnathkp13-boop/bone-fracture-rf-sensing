@@ -442,17 +442,36 @@ def uwb_3_11(substrate: str = "RO4350B", corrugations: int = 0) -> Vivaldi:
 
     They cost nothing in mesh: 7.40 M cells either way, identical minimum cell
     and time step, because the slot edges fall inside refinement the flare
-    already required. What they cost is *convergence*. The slots are resonant
-    by design - that is how they lengthen the current path - so they ring, and
-    the stored energy will not decay to the -40 dB end criterion. The plain
-    design converged in 336 recorded steps and 795 s; the corrugated one was
-    still going after 70 minutes at 1,735 steps, advancing 12 steps per 30 s
-    against a 60,000-step cap. Extrapolated runtime was about 40 hours, so it
-    was abandoned rather than finished.
+    already required.
 
-    If corrugations are revisited, make them shallower and fewer, and expect to
-    relax EndCriteria - a design that rings by intent cannot be judged by a
-    decay criterion tuned for one that does not.
+    **The 40-hour convergence claim made here was wrong, and both halves of it
+    were wrong.** It read: the slots ring by design, stored energy will not
+    decay to -40 dB, the corrugated run was still going after 70 minutes at
+    1,735 timesteps advancing 12 per 30 s against a 60,000 cap, extrapolating
+    to about 40 hours. Retried in scripts/retry_corrugations.py:
+
+    | run | converged | wall time |
+    |---|---|---|
+    | plain, -30 dB | timestep 6,608 | 578 s |
+    | 4 slots x 4 mm | timestep 6,972 | 601 s |
+    | 6 slots x 6 mm | timestep 7,952 | 738 s |
+
+    Corrugations converge in 4% more time than plain, not 40 hours. The
+    original run advanced at 0.4 timesteps/s where this machine does 11 on the
+    identical mesh, so it was starved of CPU, not ringing. A 28x speed anomaly
+    should have been read as a broken run rather than a property of the
+    geometry.
+
+    They are still not the fix, but now for a measured reason rather than an
+    abandoned one. 4 slots x 4 mm moves S11 at 3.0 GHz from -6.61 to -6.41 dB -
+    the wrong way - and Re(Zin) from 113 to 111 ohm. 6 slots x 6 mm reaches
+    94 ohm but breaks the contiguous band down to 8.97-12.00 GHz.
+
+    The low-frequency shortfall is not edge-current resonance and not a cutoff.
+    See docs/stage5-findings.md: there is a fully matched island at
+    2.225-2.725 GHz reaching -33 dB, so the antenna radiates well below the
+    stated band edge. What sits between is a mismatch, and the remedy is a feed
+    transformer - scripts/tune_feed_taper.py.
     """
     w_feed = 1.74 if substrate == "RO4350B" else 3.08   # 50 ohm microstrip
     return Vivaldi(length=150.0, taper_start=20.0, feed_len=8.0,
