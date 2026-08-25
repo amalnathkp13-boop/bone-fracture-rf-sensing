@@ -788,6 +788,52 @@ def limitations(f):
         "marginal one, as Section 6 demonstrates directly. Any future work "
         "that strengthens the error model should report the class separation "
         "in dB alongside any classification statistic."))
+
+    f.append(P("8.1&nbsp;&nbsp;Limitation 3 is being removed", "H2"))
+    f.append(P(
+        "The two-dimensional assumption is the one limitation that has been "
+        "acted on rather than only recorded. A three-dimensional model of the "
+        "same problem has been built and verified against the solver: the "
+        "limb becomes concentric cylinders of skin, fat and muscle around a "
+        "cortical tube, with the bone offset 14 mm toward the skin so that "
+        "its near wall sits at 6.0 mm, the same depth the layered phantom "
+        "uses. Without that offset a centred bone would lie 20 mm deep and "
+        "the two models would differ in depth as well as geometry, so no "
+        "difference in the result could be attributed to curvature. The "
+        "offset is also the anatomy: the tibial and radial shafts are "
+        "subcutaneous, which is why they are the candidate sites."))
+    f.append(fig("limb_models_2d_3d.png",
+                 "Figure 12. What the solver integrates. (a) The plane the "
+                 "two-dimensional model solves, in which the bone is a pair "
+                 "of flat layers. (b) Transverse and (c) longitudinal "
+                 "sections of the cylindrical model, showing the offset bone "
+                 "and the fracture cut through the cortical wall. (d) The "
+                 "three-dimensional domain. The flat model is not a picture "
+                 "of a limb; it is a picture of the plane a 2D TMz solver "
+                 "actually integrates.",
+                 width=170 * mm, max_h=112 * mm))
+    f.append(Spacer(1, 2 * mm))
+    f.append(P(
+        "Three effects appear in three dimensions that the plane cannot "
+        "produce, and they do not all act in the same direction, which is why "
+        "the comparison has to be measured rather than argued. A curved skin "
+        "surface spreads the reflected wavefront and costs signal. Energy "
+        "leaves the plane that a two-dimensional model traps inside it, which "
+        "also costs signal. But a transverse crack severs a curved cortical "
+        "wall, so the scattering edge is an arc rather than a point and is "
+        "illuminated across a range of incidence angles, which can return "
+        "signal the flat model cannot represent."))
+    f.append(P(
+        "<b>The comparison is not yet run, and the result is not claimed "
+        "here.</b> The three-dimensional grid is 0.4 mm at a 4 GHz centre "
+        "frequency, 9.6 million cells against the 0.14 million of the "
+        "two-dimensional matrix, and the full run is approximately 2.6 hours "
+        "on a T4 GPU. Because that grid can only carry roughly 3&ndash;6 GHz, "
+        "the two-dimensional data will be scored over the same window before "
+        "the two are compared; comparing 3&ndash;6 GHz against 3&ndash;11 GHz "
+        "would confound geometry with bandwidth, and Section 6 established "
+        "that bandwidth is worth 22.9 dB here, far more than any plausible "
+        "geometric effect.", "Key"))
     f.append(PageBreak())
 
 
