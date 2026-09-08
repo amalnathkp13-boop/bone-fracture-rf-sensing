@@ -56,7 +56,11 @@ def main() -> int:
         "gap": float(sc[fr].min() - sc[~fr].max()),
         "intact_by_ov": {f"{o*1e3:.0f}": round(float(sc[~fr & (ov == o)].mean()), 1)
                          for o in sorted(set(ov))},
-        "antenna": {k: (round(v, 3) if isinstance(v, float) else v)
+        # 6 dp, not 3. frac_below_10dB_in_band is a FRACTION that the report
+        # prints as a percentage to 2 dp, so 3 dp here left only one decimal
+        # of the percentage: 0.9968847 became 0.997 and the report said
+        # 99.70% in one place and 99.69% in another.
+        "antenna": {k: (round(v, 6) if isinstance(v, float) else v)
                     for k, v in json.loads(need[1].read_text()).items()},
         "gain": [(r["f_GHz"], round(r["gain_peak_dBi"], 2))
                  for r in json.loads(need[2].read_text())],
