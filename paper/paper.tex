@@ -98,6 +98,30 @@ degradation, whether from reduced bandwidth, a harsher error model or a more
 difficult anatomy, is invisible until it becomes severe enough to cause an
 actual misclassification.
 
+\subsection{Evaluation practice, and where it fails}
+
+Classification metrics are the common currency of this literature: area
+under the curve, accuracy, and paired sensitivity and specificity. All three
+are bounded, and all three therefore saturate. Saturation is not a subtle
+property --- a classifier that makes no errors attains the bound by
+definition --- but its practical consequence is rarely exercised, because
+doing so requires deliberately degrading a working system and re-measuring.
+
+The consequence is that above the saturation point these metrics report
+membership of a set, ``makes no errors'', rather than a position within it.
+Two systems can both report an AUC of 1.0000 while one has an order of
+magnitude more margin than the other against the error sources its model
+omits. For a simulation study, where the error model is an assumption rather
+than a measurement, that distinction is the whole question: the margin is
+precisely the budget available to the terms the simulation does not contain.
+
+This is familiar in another guise. Statistical practice has long
+distinguished significance from effect size, on the grounds that a $p$-value
+answers a different question from ``how large is it''. The argument here is
+the same one applied to detection: a classification statistic answers
+``are they separable'', and once the answer is yes it cannot answer ``by how
+much''. What is reported alongside it should.
+
 We make three contributions.
 
 \begin{enumerate}
@@ -253,6 +277,49 @@ kerf under the thickest overlay, and the strongest intact cases also occur
 at the thickest overlay. A leak would not order itself by physical
 difficulty.
 
+\subsection{Performance across the design space}
+
+\begin{table}[t]
+\caption{Separation resolved by condition}
+\label{tab:space}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Condition} & \textbf{n} & \textbf{Weakest fract.} &
+\textbf{Separation} \\
+\midrule
+\multicolumn{4}{@{}l}{\emph{Soft-tissue overlay}} \\
+\quad 0\,mm & 144 & 88.9\,dB & 69.3\,dB \\
+\quad 3\,mm & 144 & 82.2\,dB & 61.3\,dB \\
+\quad 6\,mm & 144 & 81.0\,dB & 54.6\,dB \\
+\quad 10\,mm & 144 & 68.5\,dB & \textbf{40.8\,dB} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Fracture width}} \\
+\quad 0.2\,mm & 96 & 68.5\,dB & \textbf{40.8\,dB} \\
+\quad 0.4\,mm & 96 & 72.0\,dB & 44.3\,dB \\
+\quad 1.0\,mm & 192 & 77.7\,dB & 50.0\,dB \\
+\quad 2.0\,mm & 96 & 82.1\,dB & 54.4\,dB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:space} resolves the result by condition. Separation falls
+monotonically with overlay, from 69.3\,dB with no overlay to 40.8\,dB at
+10\,mm, and rises monotonically with fracture width, from 40.8\,dB at
+0.2\,mm to 54.4\,dB at 2.0\,mm. Both orderings follow physical prediction:
+a thicker overlay attenuates the two-way path, and a narrower kerf presents
+a smaller dielectric discontinuity.
+
+Two consequences follow. First, the headline 40.8\,dB is the \emph{worst
+case} over the entire design space, not a typical value; the median
+condition is considerably more comfortable. Second, the AUC is 1.0000 in
+every one of these eight strata, so the entire 28.5\,dB spread visible in
+Table~\ref{tab:space} is invisible to it. The oblique state, which presents
+an angled face and might be expected to scatter away from the antenna, gives
+a minimum of 78.2\,dB, between the 1.0 and 2.0\,mm transverse kerfs;
+obliquity does not penalise detection in this geometry.
+
 \subsection{Bandwidth-dependent margin loss}
 
 \begin{table}[t]
@@ -292,6 +359,31 @@ Table~\ref{tab:band} and Fig.~\ref{fig:sat} give the result. Removing
 separation}. The AUC is 1.0000 in all three windows and registers none of
 it.
 
+\subsection{Where the penalty falls}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/margin_envelope.png}
+\caption{Separation against soft-tissue overlay at full and restricted
+bandwidth. The penalty is not uniform: it is largest at 6\,mm, where the
+band-limited false alarm appears, rather than at 10\,mm where the signal is
+weakest. Measuring the penalty only at the hardest operating point would
+understate it by 10\,dB.}
+\label{fig:env}
+\end{figure}
+
+The aggregate figures of Table~\ref{tab:band} conceal a further structure.
+Fig.~\ref{fig:env} resolves the loss by overlay thickness. It is
+$-3.7$\,dB with no overlay, $-10.1$\,dB at 3\,mm, $-25.4$\,dB at 6\,mm and
+$-15.5$\,dB at 10\,mm.
+
+The penalty is therefore \emph{not} monotonic in difficulty, and is largest
+in the middle of the clinical envelope rather than at its hardest point.
+This matters methodologically: a study that characterised the cost of
+reduced bandwidth only at its worst-case operating point, which is the
+natural thing to do, would have recorded $-15.5$\,dB and understated the
+true worst case by 10\,dB.
+
 \subsection{Mechanism}
 Band limitation degrades both classes, and the intact class is the more
 damaging. The weakest fractured score falls from 68.5 to 55.7\,dB, as
@@ -321,7 +413,36 @@ resistive plateau of 24--37\,$\Omega$ across 3.25--4.40\,GHz. A load of
 24.4\,$\Omega$ into a 50\,$\Omega$ feed predicts $-9.3$\,dB return loss and
 $-9.14$\,dB was measured.
 
-A tapered feed, 4.5\,mm at the flare and 1.74\,mm at the port, moved the
+\begin{table}[t]
+\caption{Feed taper sweep, port fixed at 1.74\,mm}
+\label{tab:feed}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Flare-end width} & \textbf{Worst} & \textbf{Covered} &
+\textbf{Re($Z_\mathrm{in}$) @ 4\,GHz} \\
+\midrule
+1.74\,mm (uniform) & $-6.61$\,dB & 84\,\% & 24.4\,$\Omega$ \\
+2.75\,mm & $-8.50$\,dB & 79\,\% & 25.9\,$\Omega$ \\
+3.50\,mm & $-8.14$\,dB & 94\,\% & 29.1\,$\Omega$ \\
+4.00\,mm & $-9.80$\,dB & 98.1\,\% & 36.7\,$\Omega$ \\
+\textbf{4.50\,mm} & $\mathbf{-9.98}$\,\textbf{dB} & \textbf{99.69\,\%} &
+\textbf{39.0\,$\Omega$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The remedy follows from the diagnosis. Widening the feed where it meets the
+flare, while holding the port at the 1.74\,mm that presents 50\,$\Omega$ to
+the connector, converts the feed into an impedance transformer.
+Table~\ref{tab:feed} shows the sweep: Re($Z_\mathrm{in}$) at 4\,GHz rises
+monotonically with flare-end width, and in-band coverage follows. The first
+two entries read as a failure and the direction was initially judged wrong;
+the third reversed that judgement, which is recorded here because two points
+of a monotonic trend are not a trend.
+
+The adopted 4.5\,mm taper moved the
 match to 2.48--12.00\,GHz, covering 99.69\,\% of the design band with a
 worst in-band value of $-9.98$\,dB and a median input resistance of
 45.6\,$\Omega$. Peak gain is 7.02, 11.87, 12.49, 12.06 and 9.33\,dBi at 3,
@@ -358,11 +479,33 @@ against a saturated metric, including grid refinement, averaging time and
 dynamic range.
 
 We therefore suggest that studies reporting near-perfect classification also
-report the separation between classes in the detector's own units, together
-with the extreme values of each class. This costs nothing, is not an
-additional experiment, and distinguishes a comfortable result from a
-marginal one in exactly the regime where the classification statistic
-cannot.
+report the following, none of which requires an additional experiment.
+
+\begin{enumerate}
+\item \emph{The separation, in the detector's own units}, together with the
+extreme values of each class. Table~\ref{tab:dist} is four numbers and
+carries more information about this system than the AUC does.
+\item \emph{The separation resolved by condition}, not only in aggregate.
+Table~\ref{tab:space} shows a 28.5\,dB spread across strata that all report
+an identical AUC, and Fig.~\ref{fig:env} shows that a degradation can fall
+hardest in the middle of the operating envelope rather than at its edge.
+\item \emph{One deliberate degradation}, re-measured. Restricting the band
+cost nothing here because the stored responses were full-band, and it
+converted an assumption about the instrument into a number.
+\end{enumerate}
+
+The third is the one we would most encourage. A simulation study can almost
+always degrade itself cheaply --- bandwidth, dynamic range, averaging,
+grid refinement --- and the resulting slope is far more informative than any
+single operating point. Reporting only the operating point is what allows a
+saturated metric to pass unnoticed.
+
+\subsection{Reproducibility}
+Every figure and every numerical value in this paper is regenerated by a
+script from stored solver output; none is transcribed by hand. The analysis
+code, the deck generators, the statistical plan and the figure sources are
+public, and the statistical plan was committed before the matrix was
+complete.
 
 \section{Limitations}
 
@@ -386,6 +529,37 @@ measurement to IEC 62209.
 
 No hardware was built and no human or animal subject was exposed at any
 point in this work.
+
+\section{Future Work}
+
+Four steps follow directly, in the order we judge most informative.
+
+\emph{Measure the limit rather than bound it.} Every result here is a lower
+bound: the classes never overlap, so the experiment reports that the
+separation exceeds what it can resolve. Pushing until detection fails would
+convert the bound into a measurement. The cheapest lever is a harsher error
+model, the next a thicker overlay, and the most expensive a kerf finer than
+the 0.2\,mm the present grid can represent.
+
+\emph{Randomise the fracture position.} Every fracture here is at a known
+location, so the study measures separability and not localisation. Drawing
+the position uniformly along the scan and scoring localisation error would
+test the migration step rather than assuming it.
+
+\emph{Complete the three-dimensional comparison.} A cylindrical limb model
+with the cortex offset toward the skin, so that the near wall sits at the
+same 6\,mm depth as the layered phantom, has been implemented and verified
+against the solver; the 192-cell equivalent has not been run. Three effects
+act in opposition --- a curved surface spreads the reflected wavefront,
+energy leaves the plane that a two-dimensional model traps, but a transverse
+crack through a curved wall presents a longer scattering edge illuminated
+over a range of incidence angles --- so the sign of the net effect is a
+measurement rather than an argument.
+
+\emph{Validate against measurement.} The error model is the binding
+assumption throughout, and only a physical bench can calibrate it. A
+machined phantom with a known kerf, measured on a vector network analyser,
+would convert the dominant assumption of this study into data.
 
 \section{Conclusion}
 

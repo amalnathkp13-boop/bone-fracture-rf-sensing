@@ -1158,13 +1158,73 @@ def stage_pipeline_paper():
            "pipeline authored at IEEE double-column width")
 
 
+# --------------------------------------- margin envelope, single column ---
+
+def stage_envelope():
+    """Detection margin against overlay, at full and restricted bandwidth.
+
+    Authored 3.4 in wide for an IEEE single-column float, so its 8 pt labels
+    print at 8 pt. The report-width figures shrink by about half in that
+    position and print their labels at four.
+
+    The result this exists to show is that the bandwidth penalty is NOT
+    uniform across the clinical envelope. It is worst at 6 mm of overlay,
+    where the band-limited false alarm appears, rather than at the thickest
+    overlay where the signal is weakest - so a study that measured the
+    penalty only at its hardest operating point would understate it.
+    """
+    import csv
+
+    def load(p):
+        r = list(csv.reader(open(p)))[1:]
+        return (np.array([float(x[6]) for x in r]),
+                np.array([x[4] == "True" for x in r]),
+                np.array([float(x[2]) for x in r]))
+
+    pa, pb = RUNS / "stage7_scores.csv", RUNS / "band_scores_antenna.csv"
+    if not (pa.exists() and pb.exists()):
+        print("  envelope: score files missing, skipped")
+        return
+    scA, frA, ovA = load(pa)
+    scB, frB, ovB = load(pb)
+    ovs = sorted(set(ovA))
+    sepA = [scA[(ovA == o) & frA].min() - scA[(ovA == o) & ~frA].max()
+            for o in ovs]
+    sepB = [scB[(ovB == o) & frB].min() - scB[(ovB == o) & ~frB].max()
+            for o in ovs]
+    x = [o * 1e3 for o in ovs]
+
+    fig, ax = plt.subplots(figsize=(3.4, 2.75))
+    ax.plot(x, sepA, "o-", color=F.BLUE, ms=6, lw=1.9,
+            label="3.0" + chr(0x2013) + "11.0 GHz")
+    ax.plot(x, sepB, "s--", color=F.RED, ms=6, lw=1.9,
+            label="4.35" + chr(0x2013) + "11.0 GHz")
+    ax.fill_between(x, sepB, sepA, color=F.RED, alpha=0.12)
+    worst = int(np.argmin(np.array(sepB) - np.array(sepA)))
+    ax.annotate(f"{sepB[worst]-sepA[worst]:.1f} dB",
+                xy=(x[worst], 0.5 * (sepA[worst] + sepB[worst])),
+                xytext=(10, 0), textcoords="offset points",
+                fontsize=8, color=F.RED, va="center")
+    ax.set_xlabel("soft-tissue overlay (mm)", fontsize=9)
+    ax.set_ylabel("class separation (dB)", fontsize=9)
+    ax.set_xticks(x)
+    ax.tick_params(labelsize=8)
+    ax.set_ylim(0, 78)
+    ax.legend(fontsize=8, loc="lower left")
+    fig.tight_layout(pad=0.4)
+    F.save(fig, "margin_envelope",
+           "the bandwidth penalty is largest at 6 mm, not at the thickest "
+           "overlay")
+
+
 STAGES = {0: stage0, 1: stage1, 2: stage2, 3: stage3,
           4: stage4, 5: stage5, 6: stage6, 7: stage7,
           "phantom": stage_phantom3d,
           "limbs": stage_limb_models,
           "pipeline": stage_pipeline,
           "saturation": stage_saturation,
-          "pipeline_paper": stage_pipeline_paper}
+          "pipeline_paper": stage_pipeline_paper,
+          "envelope": stage_envelope}
 
 
 def main() -> int:
