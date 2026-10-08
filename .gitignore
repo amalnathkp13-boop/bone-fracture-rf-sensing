@@ -25,3 +25,11 @@ out/
 
 # generated for upload, regenerate with scripts/package_for_colab.py
 bonesim_colab.zip
+
+# LaTeX build artefacts; paper.tex and paper.pdf ARE committed
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/pg-*.jpg

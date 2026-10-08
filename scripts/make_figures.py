@@ -973,11 +973,198 @@ def stage_pipeline():
            "acquisition and processing, on one real solved cell")
 
 
+# ----------------------------------------------- the paper's key figure ---
+
+def stage_saturation():
+    """AUC against separation as usable bandwidth shrinks.
+
+    This is the figure the paper is built around, and it exists because the
+    claim is hard to believe in words: a classification metric reporting a
+    perfect, unchanged score while the quantity it is supposed to summarise
+    loses more than half its value. Putting both on one pair of axes makes it
+    a single glance.
+    """
+    import csv
+
+    # Measured by scripts/run_band_study.py over the same 192 solved cells.
+    bands = [("3.00-11.0", 8.00, 1.0000, 40.8),
+             ("4.35-11.0", 6.65, 1.0000, 17.9),
+             ("5.00-11.0", 6.00, 1.0000, 16.0)]
+    bw = [b[1] for b in bands]
+    auc = [b[2] for b in bands]
+    sep = [b[3] for b in bands]
+
+    fig, ax = plt.subplots(1, 2, figsize=(9.4, 3.5))
+
+    # (a) the two quantities against bandwidth
+    a0 = ax[0]
+    a0.plot(bw, sep, "o-", color=F.RED, ms=7, lw=2.0, label="class separation")
+    a0.set_xlabel("usable bandwidth (GHz)")
+    a0.set_ylabel("separation (dB)", color=F.RED)
+    a0.tick_params(axis="y", labelcolor=F.RED)
+    a0.set_ylim(0, 46)
+    a0.invert_xaxis()
+    for x, y in zip(bw, sep):
+        a0.annotate(f"{y:.1f} dB", (x, y), textcoords="offset points",
+                    xytext=(0, 9), ha="center", fontsize=8, color=F.RED)
+
+    a1 = a0.twinx()
+    a1.plot(bw, auc, "s--", color=F.BLUE, ms=7, lw=2.0, label="AUC")
+    a1.set_ylabel("area under ROC curve", color=F.BLUE)
+    a1.tick_params(axis="y", labelcolor=F.BLUE)
+    a1.set_ylim(0.5, 1.06)
+    a1.grid(False)
+    a1.annotate("AUC = 1.0000 throughout:\nsaturated, and blind to the loss",
+                (bw[1], 1.0), textcoords="offset points", xytext=(-6, -42),
+                ha="center", fontsize=8, color=F.BLUE,
+                arrowprops=dict(arrowstyle="->", lw=0.9, color=F.BLUE))
+    a0.set_title("(a) the metric does not move; the margin collapses",
+                 fontsize=10)
+
+    # (b) the distributions behind it
+    rows = {}
+    for key, path in (("full", RUNS / "stage7_scores.csv"),
+                      ("cut", RUNS / "band_scores_antenna.csv")):
+        if not path.exists():
+            print(f"  saturation: {path.name} missing, skipped")
+            plt.close(fig)
+            return
+        r = list(csv.reader(open(path)))[1:]
+        sc = np.array([float(x[6]) for x in r])
+        fr = np.array([x[4] == "True" for x in r])
+        rows[key] = (sc[~fr], sc[fr])
+
+    a2 = ax[1]
+    bins = np.linspace(0, 115, 46)
+    for key, alpha, lab in (("full", 0.85, "3.0-11.0 GHz"),
+                            ("cut", 0.45, "4.35-11.0 GHz")):
+        itc, frc = rows[key]
+        a2.hist(itc, bins=bins, color=F.BLUE, alpha=alpha,
+                label=f"intact, {lab}")
+        a2.hist(frc, bins=bins, color=F.RED, alpha=alpha,
+                label=f"fractured, {lab}")
+    a2.set_xlabel("detector score (dB)")
+    a2.set_ylabel("count")
+    a2.set_title("(b) the classes close in, but never touch", fontsize=10)
+    # The legend already says which is which; an annotation box saying the
+    # same thing landed on top of it.
+    a2.legend(fontsize=7.4, loc="upper left", ncol=1, framealpha=0.92)
+    a2.set_ylim(0, 96)
+
+    fig.tight_layout()
+    F.save(fig, "auc_saturation",
+           "a perfect AUC hides a 22.9 dB loss of margin")
+
+
+# ------------------------------------- the pipeline figure, for the paper ---
+
+def stage_pipeline_paper():
+    """The same pipeline as stage_pipeline, authored for a journal column.
+
+    The report version is 13.6 in wide. Placed in an IEEE double-column float
+    it shrinks to 6.9 in, a factor of 0.51, so its 8.4 pt labels print at
+    4.3 pt and its ticks at 3.7 pt - well under the ~8 pt a reviewer expects.
+    Matplotlib font sizes are absolute, so the fix is to author at the final
+    width and cut content until it fits, rather than to scale a crowded
+    figure down.
+
+    Three data panels instead of four: raw, clutter-removed, migrated. The
+    empty-scene step is one sentence in the text and does not need a panel.
+    Colorbars are dropped; the quantity shown is a ratio whose absolute scale
+    carries no argument.
+    """
+    from matplotlib.patches import Rectangle
+    from bonesim.geometry.phantom import Fracture, Phantom
+    from bonesim.perturb.errors import SpecimenVariation
+
+    nl = chr(10)
+    cell = RUNS / "matrix_colab" / "s00_kerf10_ov06.0.npz"
+    if not cell.exists():
+        print("  pipeline_paper: matrix cell missing, skipped")
+        return
+    d = ScanData.load(cell)
+    ref = ScanData(d.f, d.x, np.ones_like(d.s11), d.z_antenna, {})
+    noisy = Instrument(seed=0).apply_post(subtract_empty_scene(d, ref))
+    clean = remove_clutter_selective(noisy, EPS_AVG)[0]
+    img = migrate(clean, EPS_AVG)
+    det = detect_snr(img, clean, z_window=(0.003, 0.024), x_margin=0.010)
+
+    # With equal aspect the schematic is height-limited, so a tall first row
+    # buys dead space on either side of the drawing rather than a bigger
+    # drawing. The row is therefore kept short and the gap closed.
+    fig = plt.figure(figsize=(7.16, 3.95))
+    fig.set_layout_engine("none")
+    gs = fig.add_gridspec(2, 3, height_ratios=[0.95, 1.30], hspace=0.30,
+                          wspace=0.30, left=0.075, right=0.985, top=0.95,
+                          bottom=0.115)
+
+    # ---- (a) acquisition schematic, full width ------------------------
+    ax = fig.add_subplot(gs[0, :])
+    ph = SpecimenVariation().draw(Phantom().with_overlay(0.006), 0)
+    ph = ph.with_fracture(Fracture(0.050, 0.001))
+    x0, x1, xf = 15.0, 85.0, 50.0
+    for mat, z0, z1 in ph.stack():
+        ax.add_patch(Rectangle((x0, -z1 * 1e3), x1 - x0, (z1 - z0) * 1e3,
+                               fc=TISSUE_RGB[mat], ec="#999", lw=0.3))
+    zc0, zc1 = ph.z_cortex * 1e3, (ph.z_cortex + ph.cortex) * 1e3
+    ax.add_patch(Rectangle((xf - 0.9, -zc1), 1.8, zc1 - zc0,
+                           fc=TISSUE_RGB["blood"], ec="none", zorder=4))
+    z_ant = -d.z_antenna * 1e3
+    for xa in np.linspace(22, 78, 7):
+        ax.add_patch(Rectangle((xa - 4.0, z_ant), 8.0, 2.0, fc="#2b2b2b",
+                               ec="none", zorder=6))
+    for dx, st in ((-1.1, "->"), (1.1, "<-")):
+        ax.annotate("", xy=(xf + dx * 0.5, -zc0), xytext=(xf + dx * 4, z_ant),
+                    arrowprops=dict(arrowstyle=st, lw=0.9, color=F.BLUE),
+                    zorder=7)
+    ax.annotate("", xy=(80, z_ant + 6), xytext=(20, z_ant + 6),
+                arrowprops=dict(arrowstyle="->", lw=1.1, color="#333"))
+    ax.text(50, z_ant + 7.4, "61 positions, 1 mm apart", fontsize=8,
+            ha="center")
+    ax.text(x0 - 2.0, z_ant / 2 - 1, f"{z_ant:.0f} mm{nl}standoff",
+            fontsize=7.5, ha="right", va="center")
+    ax.annotate("1 mm fracture", xy=(xf + 1.2, -zc0 - 1.5), xytext=(60, -27),
+                fontsize=8, color=TISSUE_RGB["blood"],
+                arrowprops=dict(arrowstyle="->", lw=0.9,
+                                color=TISSUE_RGB["blood"]))
+    ax.set_xlim(6, 97); ax.set_ylim(-29, z_ant + 10)
+    ax.set_aspect("equal"); ax.axis("off")
+    ax.set_title("(a) acquisition: one $S_{11}$ per position, per frequency",
+                 fontsize=9, pad=2)
+
+    # ---- (b) to (d) three stages --------------------------------------
+    ext = [d.x[0] * 1e3, d.x[-1] * 1e3, d.f[-1] / 1e9, d.f[0] / 1e9]
+
+    def spec(ax, data, title):
+        ax.imshow(np.abs(data.s11), aspect="auto", cmap="viridis", extent=ext)
+        ax.set_xlabel("position (mm)", fontsize=8)
+        ax.set_ylabel("frequency (GHz)", fontsize=8)
+        ax.set_title(title, fontsize=9, pad=3)
+        ax.tick_params(labelsize=7.5)
+        ax.grid(False)
+
+    spec(fig.add_subplot(gs[1, 0]), noisy, "(b) measured, clutter dominant")
+    spec(fig.add_subplot(gs[1, 1]), clean, "(c) after clutter removal")
+
+    ax = fig.add_subplot(gs[1, 2])
+    F.image_axes(ax, img, db_floor=-25.0)
+    ax.axvline(50.0, color="#ffffff", ls=":", lw=1.0, alpha=0.85)
+    ax.set_title(f"(d) migrated, {det.ratio_db:.0f} dB", fontsize=9, pad=3)
+    ax.set_xlabel("position (mm)", fontsize=8)
+    ax.set_ylabel("depth (mm)", fontsize=8)
+    ax.tick_params(labelsize=7.5)
+
+    F.save(fig, "pipeline_paper",
+           "pipeline authored at IEEE double-column width")
+
+
 STAGES = {0: stage0, 1: stage1, 2: stage2, 3: stage3,
           4: stage4, 5: stage5, 6: stage6, 7: stage7,
           "phantom": stage_phantom3d,
           "limbs": stage_limb_models,
-          "pipeline": stage_pipeline}
+          "pipeline": stage_pipeline,
+          "saturation": stage_saturation,
+          "pipeline_paper": stage_pipeline_paper}
 
 
 def main() -> int:
