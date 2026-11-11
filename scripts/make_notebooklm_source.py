@@ -39,6 +39,7 @@ MAIN = [
     ("Bandwidth study: what a saturated statistic conceals",
      "docs/band-study.md"),
     ("Radio-frequency exposure assessment", "docs/safety-sar.md"),
+    ("Bill of materials for a physical build", "docs/bill-of-materials.md"),
 ]
 APPENDIX = [
     ("Compute budget and measured solver performance",

@@ -987,39 +987,58 @@ def stage_saturation():
     import csv
 
     # Measured by scripts/run_band_study.py over the same 192 solved cells.
-    bands = [("3.00-11.0", 8.00, 1.0000, 40.8),
-             ("4.35-11.0", 6.65, 1.0000, 17.9),
-             ("5.00-11.0", 6.00, 1.0000, 16.0)]
-    bw = [b[1] for b in bands]
+    # Windows are categorical, not a bandwidth axis. A first version plotted
+    # separation against bandwidth and it told a clean, wrong story: that
+    # margin falls with bandwidth. The fourth window below - the upper band
+    # removed instead of the lower, 3.3 GHz wide - has MORE margin than the
+    # full 8 GHz, so what matters is which end is kept, not how much.
+    bands = [("3.0" + chr(0x2013) + "11.0", 8.00, 1.0000, 40.8, "full band"),
+             ("4.35" + chr(0x2013) + "11.0", 6.65, 1.0000, 17.9,
+              "low cut"),
+             ("5.0" + chr(0x2013) + "11.0", 6.00, 1.0000, 16.0,
+              "more low"),
+             ("3.0" + chr(0x2013) + "6.3", 3.30, 1.0000, 51.5,
+              "upper cut"),
+             ("3.0" + chr(0x2013) + "4.4", 1.40, 1.0000, 43.0,
+              "most cut")]
+    lab = [b[0] for b in bands]
     auc = [b[2] for b in bands]
     sep = [b[3] for b in bands]
+    xs = np.arange(len(bands))
 
-    fig, ax = plt.subplots(1, 2, figsize=(9.4, 3.5))
+    # Authored at IEEE two-column width so print-size fonts are what is drawn.
+    fig, ax = plt.subplots(1, 2, figsize=(7.2, 2.8),
+                           gridspec_kw={"width_ratios": [1.3, 1.0]})
 
-    # (a) the two quantities against bandwidth
+    # (a) separation by window, AUC on the twin axis. Five bars is too many
+    # for in-bar captions, so the description rides on a two-line tick label.
     a0 = ax[0]
-    a0.plot(bw, sep, "o-", color=F.RED, ms=7, lw=2.0, label="class separation")
-    a0.set_xlabel("usable bandwidth (GHz)")
-    a0.set_ylabel("separation (dB)", color=F.RED)
-    a0.tick_params(axis="y", labelcolor=F.RED)
-    a0.set_ylim(0, 46)
-    a0.invert_xaxis()
-    for x, y in zip(bw, sep):
+    cols = [F.GREY, F.RED, F.RED, F.GREEN, F.GREEN]
+    a0.bar(xs, sep, color=cols, width=0.62, alpha=0.9)
+    for x, y in zip(xs, sep):
         a0.annotate(f"{y:.1f} dB", (x, y), textcoords="offset points",
-                    xytext=(0, 9), ha="center", fontsize=8, color=F.RED)
+                    xytext=(0, 3), ha="center", fontsize=7.5,
+                    fontweight="bold")
+    a0.set_xticks(xs)
+    a0.set_xticklabels([l + chr(10) + f"{bw:.2f} wide" + chr(10) + why
+                        for (l, bw, _, _, why) in bands], fontsize=6.8)
+    a0.set_xlabel("window (GHz), its width (GHz), which end was removed",
+                  fontsize=7.2)
+    a0.set_ylabel("class separation (dB)", fontsize=8)
+    a0.tick_params(axis="y", labelsize=7.5)
+    a0.set_ylim(0, 70)
 
     a1 = a0.twinx()
-    a1.plot(bw, auc, "s--", color=F.BLUE, ms=7, lw=2.0, label="AUC")
-    a1.set_ylabel("area under ROC curve", color=F.BLUE)
-    a1.tick_params(axis="y", labelcolor=F.BLUE)
+    a1.plot(xs, auc, "s--", color=F.BLUE, ms=5, lw=1.5)
+    a1.set_ylabel("area under ROC curve", color=F.BLUE, fontsize=8)
+    a1.tick_params(axis="y", labelcolor=F.BLUE, labelsize=7.5)
     a1.set_ylim(0.5, 1.06)
     a1.grid(False)
-    a1.annotate("AUC = 1.0000 throughout:\nsaturated, and blind to the loss",
-                (bw[1], 1.0), textcoords="offset points", xytext=(-6, -42),
-                ha="center", fontsize=8, color=F.BLUE,
+    a1.annotate("AUC = 1.0000" + chr(10) + "in every window", (xs[2], 1.0),
+                textcoords="offset points", xytext=(0, -34), ha="center",
+                fontsize=7.2, color=F.BLUE,
                 arrowprops=dict(arrowstyle="->", lw=0.9, color=F.BLUE))
-    a0.set_title("(a) the metric does not move; the margin collapses",
-                 fontsize=10)
+    a0.set_title("(a) the AUC never moves; the margin does", fontsize=8.2)
 
     # (b) the distributions behind it
     rows = {}
@@ -1043,12 +1062,13 @@ def stage_saturation():
                 label=f"intact, {lab}")
         a2.hist(frc, bins=bins, color=F.RED, alpha=alpha,
                 label=f"fractured, {lab}")
-    a2.set_xlabel("detector score (dB)")
-    a2.set_ylabel("count")
-    a2.set_title("(b) the classes close in, but never touch", fontsize=10)
+    a2.set_xlabel("detector score (dB)", fontsize=8)
+    a2.set_ylabel("count", fontsize=8)
+    a2.tick_params(labelsize=7.5)
+    a2.set_title("(b) the classes close in, but never touch", fontsize=8.2)
     # The legend already says which is which; an annotation box saying the
     # same thing landed on top of it.
-    a2.legend(fontsize=7.4, loc="upper left", ncol=1, framealpha=0.92)
+    a2.legend(fontsize=6.8, loc="upper left", ncol=1, framealpha=0.92)
     a2.set_ylim(0, 96)
 
     fig.tight_layout()

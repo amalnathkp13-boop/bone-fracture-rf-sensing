@@ -55,10 +55,12 @@ we re-scored the identical 192 cells over restricted frequency windows, a
 controlled manipulation requiring no further electromagnetic simulation.
 Removing 3.00--4.35\,GHz reduced the class separation from 40.8\,dB to
 17.9\,dB, more than half, \emph{while the AUC remained exactly 1.0000}. The
-metric registered none of the loss. We identify the mechanism as a loss of
-range resolution, 3.67\,mm to 4.42\,mm, which prevents migration from
-collapsing a layered-interface artefact and converts it into a
-specimen-dependent false alarm. We argue that any study reporting a
+metric registered none of the loss. The loss is not a bandwidth effect:
+removing the \emph{upper} band instead (keeping 3.0--6.3\,GHz, the range of
+a low-cost VNA) \emph{raised} the separation to 51.5\,dB at coarser range
+resolution. What matters is the low band, which is what lets migration
+collapse a deep layered-interface reflection; without it that reflection
+becomes a specimen-dependent false alarm. We argue that any study reporting a
 saturated classification statistic should report the underlying margin in
 decibels alongside it, and we quantify what that practice would have changed
 here.
@@ -335,6 +337,9 @@ obliquity does not penalise detection in this geometry.
 3.00--11.0\,GHz & 8.00\,GHz & 3.67\,mm & 1.0000 & \textbf{40.8\,dB} \\
 4.35--11.0\,GHz & 6.65\,GHz & 4.42\,mm & 1.0000 & \textbf{17.9\,dB} \\
 5.00--11.0\,GHz & 6.00\,GHz & 4.90\,mm & 1.0000 & 16.0\,dB \\
+\addlinespace
+3.00--6.30\,GHz & 3.30\,GHz & 8.91\,mm & 1.0000 & \textbf{51.5\,dB} \\
+3.00--4.40\,GHz & 1.40\,GHz & 21.0\,mm & 1.0000 & \textbf{43.0\,dB} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -342,8 +347,10 @@ obliquity does not penalise detection in this geometry.
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/auc_saturation.png}
-\caption{(a)~As usable bandwidth falls, the class separation collapses from
-40.8\,dB to 16.0\,dB while the AUC remains pinned at 1.0000. (b)~The
+\caption{(a)~Class separation by window, AUC on the right axis: removing the
+low end collapses the separation from 40.8 to 16.0\,dB, removing the upper
+end instead raises it to 51.5\,dB, and the AUC reads 1.0000 throughout.
+(b)~The
 underlying distributions converge from both sides but do not overlap, which
 is precisely why the classification statistic cannot see the change.}
 \label{fig:sat}
@@ -356,8 +363,7 @@ processing chain and the detector all held exactly constant.
 
 Table~\ref{tab:band} and Fig.~\ref{fig:sat} give the result. Removing
 3.00--4.35\,GHz costs \textbf{22.9\,dB, more than half the total
-separation}. The AUC is 1.0000 in all three windows and registers none of
-it.
+separation}. The AUC is 1.0000 in every window and registers none of it.
 
 \subsection{Where the penalty falls}
 
@@ -392,13 +398,28 @@ expected from reduced penetration and resolution. The strongest
 alarm rather than a missed detection. It occurs on one specimen at 6\,mm
 overlay against a group mean of 23.7\,dB.
 
-The mechanism follows from the resolution column of Table~\ref{tab:band}.
-Bandwidth buys range resolution. At full bandwidth, migration resolves that
-specimen's layered-interface reflection and collapses it; band-limited, the
-artefact smears into the detection window and registers as a target. Because
-the effect is specimen-dependent, the concern is variance rather than the
-mean shift: one specimen in eight spikes, and a larger cohort would be
-expected to contain worse outliers.
+An obvious reading is that bandwidth buys range resolution and the
+4.42\,mm of the restricted window can no longer resolve the artefact. The
+last two rows of Table~\ref{tab:band} refute it. Keeping only
+3.0--6.3\,GHz --- the range of a low-cost VNA, with a resolution of
+8.91\,mm, more than twice as coarse --- \emph{raises} the separation to
+51.5\,dB, and the same specimen-3 cell that reached 37.8\,dB at
+4.35--11\,GHz reads 10.2\,dB there. Even 3.0--4.4\,GHz, a 1.4\,GHz window
+with 21\,mm resolution, retains 43.0\,dB.
+Resolution is not the driver. What the two windows differ in is which end
+of the band was removed.
+
+The low band carries the penetration. The deep layered reflection that
+migration must collapse is returned almost entirely by the frequencies that
+reach it; strip them and the reflection is undersampled, and its residue
+lands in the detection window as a target. The upper band contributes
+little to that reflection through 6\,mm or more of overlay --- on the
+hardest fractured cell the fracture peak changes by about 1\,dB when
+6.3--11\,GHz is removed while the image background falls by 10\,dB --- so
+removing it costs resolution the detector does not need and removes noise it
+does not want. Because the false alarm is specimen-dependent, the concern is
+variance rather than the mean shift: one specimen in eight spiked, and a
+larger cohort would be expected to contain worse.
 
 \subsection{Consequence for the instrument}
 This measurement was not academic. An antipodal Vivaldi antenna
@@ -491,7 +512,9 @@ an identical AUC, and Fig.~\ref{fig:env} shows that a degradation can fall
 hardest in the middle of the operating envelope rather than at its edge.
 \item \emph{One deliberate degradation}, re-measured. Restricting the band
 cost nothing here because the stored responses were full-band, and it
-converted an assumption about the instrument into a number.
+converted an assumption about the instrument into a number; lowering the
+modelled dynamic range from 95 to 70\,dB over the 3.0--6.3\,GHz window
+then cost a further 15\,dB (51.5 to 36.4\,dB) at an unchanged AUC.
 \end{enumerate}
 
 The third is the one we would most encourage. A simulation study can almost
@@ -566,9 +589,11 @@ would convert the dominant assumption of this study into data.
 Across 192 full-wave acquisitions from eight simulated specimens, fractured
 and intact limbs separate by 40.8\,dB with no overlap, giving an AUC of
 1.0000 with leave-one-specimen-out sensitivity 0.998 and specificity 1.000.
-Restricting the usable band removed more than half of that separation while
-the AUC remained exactly 1.0000, and the mechanism is a loss of range
-resolution that converts a resolvable layered-interface artefact into a
+Removing the low end of the band took away more than half of that
+separation while the AUC remained exactly 1.0000; removing the high end
+instead, at coarser resolution, gave more separation than the full band.
+The low frequencies carry the penetration that lets migration collapse a
+deep layered reflection, and without them that reflection becomes a
 specimen-dependent false alarm. A perfect classification score is therefore
 a ceiling rather than a result, and should be accompanied by the margin it
 conceals.

@@ -1,0 +1,25 @@
+subsystem,item,spec_from_simulation,suggested_part,qty,indicative_inr,note
+instrument,VNA preferred,"1-port S11; 3-11 GHz (antenna 2.48-12.00); >=201 pts; 0 dBm; >=95 dB dyn range @1 kHz IFBW",department lab VNA 8-20 GHz,1,0,check first - decides viability
+instrument,VNA fallback 1,50 kHz-6.3 GHz,LiteVNA-64,1,9000,"measured on the matrix: AUC 1.0000; 51.5 dB band-only at 95 dB dyn range; 36.4 dB at 70 dB - works"
+instrument,VNA fallback 2,to 4.4 GHz,NanoVNA V2 Plus4,1,7000,"measured on the matrix: AUC 1.0000; 43.0 dB band-only at 95 dB dyn range; 70 dB not run - upper bound"
+instrument,calibration kit,SMA SOL calibrated at the antenna connector,SMA short/open/load,1,2000,often bundled with LiteVNA
+antenna,substrate,"RO4350B 0.762 mm 1 oz Cu 100x150 mm; antenna 150x90 mm",Rogers RO4350B,2,3500,FR4 alt INR 300 costs 2.4 dB @9 GHz 3.6 dB @11
+antenna,fabrication,"etch both faces from figures/vivaldi.dxf; 4x 3.2 mm holes at (6,+/-38) mm",PCB house or in-house,2,3000,one spare
+antenna,SMA connector,"end-launch 18 GHz; 1.74 mm port trace; no pads needed",L-com RFPCB-SMA-FS18G-55 (solder) or Southwest 292-04A-9 (solderless),4,1600,NO cheap 6 GHz parts; Southwest is ~10x the price
+antenna,mounting,M3 nylon standoffs for 4 holes,M3x10 nylon,8,200,keeps metal out of the near field
+cabling,test cable,phase-stable SMA-SMA 18 GHz 60 cm,Mini-Circuits/Pasternack phase-stable,1,4500,secure it - flexing changes phase
+cabling,port saver,SMA F-F 18 GHz,SMA F-F adapter,2,500,protects the VNA port
+stage,rail + lead screw,">=60 mm scan (61 pos @1 mm); 200 mm travel; 8 mm screw with anti-backlash nut",2020 extrusion 200 mm + T8 anti-backlash,1,2800,backlash is a systematic phase error
+stage,motor + driver + PSU,NEMA 17 + A4988 + 12 V 3 A,standard 3D-printer parts,1,1400,1 mm per step; settle 200 ms
+stage,home switch,repeatable zero,microswitch,1,0,included in rail cost
+stage,controller,serial step/settle/trigger,Arduino Nano or ESP32,1,600,laptop drives the VNA over USB
+fixture,antenna holder,"12 mm standoff +/-0.3 mm",acrylic or 3D-printed bracket,1,0,in frame cost
+fixture,frame + rest + tank,rigid assembly; bone axis parallel to rail,2020 extrusion + acrylic,1,2500,rigidity makes the 100 um stage spec achievable
+phantom,phantom materials,"oil-in-gelatin; layers skin 2 / fat 3 / muscle 1 mm; overlay slabs 0/3/6/10 mm","DI water, gelatin 250 bloom, kerosene/safflower oil, surfactant, n-propanol, p-toluic acid, NaCl",-,1800,measure each batch with a coax probe
+phantom,bone specimens,"mid-shaft ~4 mm cortex ~10 mm marrow",goat or bovine tibia fresh,6-12,900,do not boil; saline gauze at 4 C
+phantom,fracture fill,haematoma is the real contrast,saline-based blood mimic,-,0,in phantom cost
+phantom,validation target,"6 mm brass rod at 20 mm depth - Stage 4 gate",brass rod 6 mm x 100 mm,1,200,image this before any bone
+phantom,kerf tools,kerfs 0.2-2.0 mm simulated,jeweller's saw + diamond wafering blade,-,0,in consumables
+phantom,metrology,record every kerf and cortical thickness,digital calliper + feeler gauges,-,0,in consumables
+phantom,consumables,,"cling film, gloves, saw blades",-,1200,
+compute,software,"bonesim package; scikit-rf + pyvisa; serial",existing laptop,1,0,nothing to buy

@@ -648,7 +648,11 @@ def band_study(f):
          "1.0000", "<b>17.9 dB</b>"],
         ["5.00&ndash;11.0 GHz (deliberately worse)", "6.00 GHz", "4.90 mm",
          "1.0000", "16.0 dB"],
-    ], [50 * mm, 24 * mm, 28 * mm, 20 * mm, 29 * mm], highlight=[2]))
+        ["3.00&ndash;6.30 GHz (upper band removed)", "3.30 GHz", "8.91 mm",
+         "1.0000", "<b>51.5 dB</b>"],
+        ["3.00&ndash;4.40 GHz (upper band removed)", "1.40 GHz", "21.0 mm",
+         "1.0000", "<b>43.0 dB</b>"],
+    ], [50 * mm, 24 * mm, 28 * mm, 20 * mm, 29 * mm], highlight=[2, 4, 5]))
     f.append(Spacer(1, 4 * mm))
     f.append(P(
         "<b>Removing 3.00&ndash;4.35 GHz costs 22.9 dB &mdash; more than half "
@@ -666,14 +670,29 @@ def band_study(f):
         "false alarm rather than a missed detection, occurring on one "
         "specimen at 6 mm overlay against a group mean of 23.7 dB."))
     f.append(P(
-        "The mechanism follows from the resolution column. Bandwidth buys "
-        "range resolution, and at full bandwidth migration resolves the "
-        "layered-interface reflection of that specimen and collapses it. Band "
-        "limited, the artefact smears into the detection window and registers "
-        "as a target. Because the effect is specimen-dependent, the concern "
-        "is variance rather than the mean shift: one specimen in eight "
-        "spikes, and a larger cohort would be expected to contain worse "
-        "outliers."))
+        "An obvious reading is that bandwidth buys range resolution and the "
+        "restricted window can no longer resolve the artefact. The last two "
+        "rows of the table refute it. Keeping only 3.0&ndash;6.3 GHz &mdash; "
+        "the range of a low-cost VNA, with a resolution of 8.91 mm, more than "
+        "twice as coarse &mdash; <i>raises</i> the separation to 51.5 dB, and "
+        "the same specimen-3 cell that reached 37.8 dB at 4.35&ndash;11 GHz "
+        "reads 10.2 dB there. Even 3.0&ndash;4.4 GHz, a 1.4 GHz window with "
+        "21 mm resolution, retains 43.0 dB. Resolution is not the driver; "
+        "what the windows differ in is which end of the band was removed."))
+    f.append(P(
+        "The low band carries the penetration. The deep layered reflection "
+        "that migration must collapse is returned almost entirely by the "
+        "frequencies that reach it; strip them and the reflection is "
+        "undersampled, and its residue lands in the detection window as a "
+        "target. The upper band contributes little to that reflection through "
+        "6 mm or more of overlay &mdash; on the hardest fractured cell the "
+        "fracture peak changes by about 1 dB when 6.3&ndash;11 GHz is removed "
+        "while the image background falls by 10 dB &mdash; so removing it "
+        "costs resolution the detector does not need and removes noise it "
+        "does not want. Because the false alarm is specimen-dependent, the "
+        "concern is variance rather than the mean shift: one specimen in "
+        "eight spiked, and a larger cohort would be expected to contain "
+        "worse.", "Key"))
     f.append(P(
         "This measurement is what established the antenna shortfall as worth "
         "correcting rather than documenting, and it directly motivated the "
