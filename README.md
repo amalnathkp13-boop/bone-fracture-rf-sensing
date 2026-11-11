@@ -172,7 +172,7 @@ and only then spend FDTD hours on it.
 | 7 | Statistical analysis plan | **complete** — see [`docs/stage7-findings.md`](docs/stage7-findings.md) |
 | 8 | 3D cylindrical limb | **model built and verified; run pending** |
 | — | RF exposure assessment | **complete** — 0 dBm adopted, all limits pass by ≥18×, see [`docs/safety-sar.md`](docs/safety-sar.md) |
-| — | Bill of materials for a physical build | **documented** — every spec traced to the simulation; cheap-VNA fallbacks scored on the solved matrix (LiteVNA-64 band 51.5 dB, 36.4 dB at 70 dB dynamic range), see [`docs/bill-of-materials.md`](docs/bill-of-materials.md) |
+| — | Bill of materials for a physical build | **documented** — every spec traced to the simulation; cheap-VNA fallbacks scored on the solved matrix (LiteVNA-64 band 51.5 dB, 36.4 dB at 70 dB dynamic range), see [`docs/bill-of-materials.md`](docs/bill-of-materials.md) ([PDF](docs/bill-of-materials.pdf), [CSV](docs/bill-of-materials.csv)) |
 
 Stage 4 was the go/no-go gate: if migration could not image a 6 mm conducting rod at
 20 mm depth in phantom, nothing downstream would be meaningful.

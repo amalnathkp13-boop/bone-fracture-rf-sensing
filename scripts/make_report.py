@@ -53,6 +53,7 @@ def styles():
     s.add(ParagraphStyle("H2", parent=s["Normal"], fontName="Helvetica-Bold",
                          fontSize=11.2, textColor=INK, spaceBefore=11,
                          spaceAfter=5, leading=14))
+    s.add(ParagraphStyle("H2k", parent=s["H2"], keepWithNext=1))
     s.add(ParagraphStyle("Cap", parent=s["Normal"], fontName="Helvetica-Oblique",
                          fontSize=8.2, textColor=colors.HexColor("#555"),
                          alignment=TA_CENTER, spaceBefore=4, spaceAfter=11,
@@ -85,7 +86,7 @@ def P(t, st="Body"):
     return Paragraph(t, S[st])
 
 
-def fig(name, caption, width=163 * mm, max_h=104 * mm):
+def fig(name, caption, width=163 * mm, max_h=104 * mm, crop=None):
     """A figure scaled to the frame, with its caption kept on the same page.
 
     Height is capped as well as width. Without the cap a tall figure - the
@@ -97,12 +98,26 @@ def fig(name, caption, width=163 * mm, max_h=104 * mm):
     p = FIG / name
     if not p.exists():
         return P(f"[missing figure: {name}]")
+    import io
     from PIL import Image as PILImage
-    w, h = PILImage.open(p).size
+    src = PILImage.open(p)
+    if crop:
+        # (left, top, right, bottom) as fractions. A drawing sheet carries
+        # a notes block that is unreadable at page width; show the panels.
+        w, h = src.size
+        l, t, r, b = crop
+        src = src.crop((int(l * w), int(t * h), int(r * w), int(b * h)))
+        buf = io.BytesIO()
+        src.save(buf, "PNG")
+        buf.seek(0)
+        path, lazy = buf, 0
+    else:
+        path, lazy = str(p), 1
+    w, h = src.size
     iw, ih = width, width * h / w
     if ih > max_h:
         iw, ih = max_h * w / h, max_h
-    im = Image(str(p), width=iw, height=ih)
+    im = Image(path, width=iw, height=ih, lazy=lazy)
     im.hAlign = "CENTER"
     return KeepTogether([im, P(caption, "Cap")])
 
@@ -982,6 +997,368 @@ def references(f):
         f.append(P(f"[{i}]&nbsp;&nbsp;{r}"))
 
 
+def appendix_bom(f, standalone=False):
+    """Bill of materials for a physical build, traced to the simulation.
+
+    The same content serves as Appendix A of the report and, with
+    standalone=True, as docs/bill-of-materials.pdf. Source of record is
+    docs/bill-of-materials.md; keep the two in step.
+    """
+    pre = "" if standalone else "A."
+    if standalone:
+        f.append(Spacer(1, 18 * mm))
+        f.append(P("Bill of Materials for a Physical Build", "TitleBig"))
+        f.append(P(TITLE, "SubBig"))
+        f.append(P("Companion to the submission report. Every specification "
+                   "is traced to the simulation that fixed it.", "Meta"))
+        f.append(Spacer(1, 10 * mm))
+    else:
+        f.append(PageBreak())
+        f.append(P("Appendix A&nbsp;&nbsp;Bill of Materials for a Physical "
+                   "Build", "H1"))
+    f.append(P(
+        "The project is purely virtual by design, and nothing listed here "
+        "has been bought. This is what a physical build would need, with "
+        "each specification traced to the simulation that fixed it rather "
+        "than to a generic shopping list. Cost figures are the proposal's "
+        "indicative Indian-supplier numbers (Robu, Element14 India, Mouser "
+        "India, Amazon.in) and <b>must be re-quoted before purchase</b>; "
+        "several are a year old."))
+    f.append(table([
+        ["Configuration", "Approximate total"],
+        ["With a department VNA (recommended)", "<b>INR 23,800</b>"],
+        ["With the LiteVNA-64 fallback", "<b>INR 32,800</b>"],
+    ], [95 * mm, 40 * mm]))
+    f.append(Spacer(1, 3 * mm))
+    f.append(P(
+        "The one thing the proposal could only guess at &mdash; whether the "
+        "cheap VNA fallbacks actually work &mdash; is now measured "
+        f"(Section {pre}2). The spreadsheet form, "
+        "<i>docs/bill-of-materials.csv</i>, carries all three VNA options, "
+        "so its column sum (INR 42,700) is not a configuration total."))
+
+    # ---------------------------------------------------------- instrument
+    f.append(P(f"{pre}1&nbsp;&nbsp;The measurement instrument", "H2k"))
+    f.append(P(
+        "The VNA decides viability. The proposal's framing stands: <i>the "
+        "single question is whether the department owns a VNA reaching "
+        "8 GHz or above.</i>"))
+    W6 = [24 * mm, 50 * mm, 34 * mm, 11 * mm, 14 * mm, 30 * mm]
+    H6 = ["Item", "Specification fixed by the simulation", "Suggested",
+          "Qty", "INR", "Note"]
+    f.append(table([
+        H6,
+        ["VNA, preferred",
+         "1-port S11; sweep 3&ndash;11 GHz (antenna is matched "
+         "2.48&ndash;12.00 GHz); at least 201 points; output 0 dBm; dynamic "
+         "range 95 dB or better at about 1 kHz IF bandwidth",
+         "Department lab VNA, 8&ndash;20 GHz", "1", "0",
+         "Check first; decides everything below"],
+        ["VNA, fallback 1", "50 kHz &ndash; 6.3 GHz", "LiteVNA-64", "1",
+         "9,000", "<b>Works</b>; measured below"],
+        ["VNA, fallback 2", "To 4.4 GHz", "NanoVNA V2 Plus4", "1", "7,000",
+         "Works on band; dynamic range untested"],
+        ["Calibration kit",
+         "SMA short / open / load, calibrated <b>at the antenna "
+         "connector</b>, not at the VNA port",
+         "SMA SOL kit (often bundled with the LiteVNA)", "1",
+         "1,500&ndash;3,000",
+         "Everything downstream is referenced to the antenna feed"],
+    ], W6))
+    f.append(Spacer(1, 3 * mm))
+    f.append(P(
+        "<b>Where the numbers come from.</b> The matrix was solved over "
+        "3&ndash;11 GHz at 201 points. The error model assumes a <b>95 dB</b> "
+        "noise floor below the strongest return, which a lab VNA at 1 kHz IF "
+        "bandwidth meets and a LiteVNA (roughly 70 dB at its top end) does "
+        "not. <b>0 dBm</b> is the adopted transmit power from the exposure "
+        "assessment: at +10 dBm the 6&ndash;11 GHz absorbed power density sat "
+        "within 1.8&times; of the ICNIRP public limit; at 0 dBm every limit "
+        "clears by at least 18&times;, and the detector has 40.8 dB of margin "
+        "to spend (Section 7)."))
+
+    # ---------------------------------------------------- cheap-VNA verdict
+    f.append(P(f"{pre}2&nbsp;&nbsp;Do the cheap VNAs work? Measured, not "
+               "guessed", "H2k"))
+    f.append(P(
+        "The proposal labelled the LiteVNA &ldquo;band-limited; degrades "
+        "resolution&rdquo; and the NanoVNA &ldquo;minimum viable, "
+        "marginal&rdquo;. Those were guesses made before the matrix was "
+        "solved. Every solved cell stores the full 3&ndash;11 GHz response, "
+        "so each fallback can be scored on exactly the data it could have "
+        "acquired, with no new simulation (<i>scripts/vna_fallback_study.py</i>, "
+        "same pipeline and detector as Stage 7)."))
+    f.append(table([
+        ["VNA option", "Usable band", "Bandwidth", "Range res.", "AUC",
+         "Class separation"],
+        ["Department VNA", "3.00&ndash;11.0 GHz", "8.00 GHz", "3.67 mm",
+         "1.0000", "<b>40.8 dB</b>"],
+        ["(first antenna, for scale)", "4.35&ndash;11.0 GHz", "6.65 GHz",
+         "4.42 mm", "1.0000", "17.9 dB"],
+        ["LiteVNA-64", "3.00&ndash;6.30 GHz", "3.30 GHz", "8.91 mm",
+         "1.0000", "<b>51.5 dB</b> at 95 dB dynamic range; <b>36.4 dB</b> "
+         "at 70 dB"],
+        ["NanoVNA V2 Plus4", "3.00&ndash;4.40 GHz", "1.40 GHz", "21.0 mm",
+         "1.0000", "<b>43.0 dB</b>, band only, at 95 dB dynamic range"],
+    ], [29 * mm, 27 * mm, 22 * mm, 20 * mm, 15 * mm, 50 * mm],
+        highlight=[3, 4]))
+    f.append(Spacer(1, 3 * mm))
+    f.append(P(
+        "<b>Verdict: both work, and on the band alone the LiteVNA beats the "
+        "department VNA.</b> Removing the upper band <i>raises</i> the "
+        "separation, 51.5 dB against 40.8, because the frequencies above "
+        "6.3 GHz contribute little through 6 mm or more of overlay and "
+        "mostly add image background the detector does not want; the low "
+        "band carries the penetration (Section 6). By overlay, the LiteVNA "
+        "band gives 64.9 / 66.6 / 65.2 / 51.5 dB at 0 / 3 / 6 / 10 mm and the "
+        "NanoVNA band 54.8 / 57.3 / 60.5 / 45.9 dB. The classes do not "
+        "overlap at any overlay for either.", "Key"))
+    f.append(P(
+        "<b>Dynamic range, measured separately.</b> The band study keeps the "
+        "error model's 95 dB noise floor, which the cheap VNAs do not have. "
+        "Re-scoring the LiteVNA band at 70 dB "
+        "(<i>scripts/vna_dynrange_study.py</i>, 576 realisations) gives "
+        "AUC 1.0000 and <b>36.4 dB</b> separation: 50.2 / 49.1 / 50.0 / "
+        "36.4 dB by overlay. The 25 dB worse floor costs 15 dB of margin, "
+        "nearly all of it at the 10 mm overlay, and what remains is within "
+        "5 dB of the department VNA's full-band 40.8. A LiteVNA-64 is "
+        "therefore a defensible instrument for this experiment, not a "
+        "compromise. The same test has not been run for the NanoVNA band; "
+        "its 43.0 dB is the band-only figure at 95 dB and should be read as "
+        "an upper bound on what that instrument would deliver."))
+
+    # ------------------------------------------------------------- antenna
+    f.append(P(f"{pre}3&nbsp;&nbsp;The antenna", "H2k"))
+    f.append(P(
+        "Design files are in <i>figures/</i>: <i>vivaldi.dxf</i> (4 layers, "
+        "mm, origin at the feed edge), <i>vivaldi_antenna.step</i>, "
+        "<i>vivaldi_fab_drawing.pdf</i> (A4, both faces dimensioned) and "
+        "<i>vivaldi_geom.json</i>. Rebuild with "
+        "<i>python scripts/make_antenna_fab.py</i>."))
+    f.append(table([
+        H6,
+        ["Substrate",
+         "Rogers RO4350B, 0.762 mm (30 mil), 1 oz Cu, 100 &times; 150 mm; "
+         "the antenna is 150 &times; 90 mm, one board per antenna",
+         "RO4350B 0.762 mm", "2", "3,500",
+         "FR4 alternative INR 300; costs 2.4 dB at 9 GHz and 3.6 dB at "
+         "11 GHz (Stage 5)"],
+        ["Fabrication",
+         "Etch both faces from <i>vivaldi.dxf</i>; four 3.2 mm mounting "
+         "holes at (6, &plusmn;38) mm",
+         "PCB house, or in-house etch", "2", "3,000", "One spare"],
+        ["SMA connector",
+         "<b>End-launch, 18 GHz rated</b>; port trace is 1.74 mm (50 ohm)",
+         "L-com RFPCB-SMA-FS18G-55 (solder, cut for 0.031 in board) or "
+         "Southwest 292-04A-9 (solderless clamp, 0.010 in pin)",
+         "4", "1,600",
+         "<b>Do not use cheap 6 GHz parts.</b> No extra pads needed; see "
+         "note"],
+        ["Mounting", "M3 nylon standoffs and screws for the four holes",
+         "M3 &times; 10 nylon", "8", "200",
+         "Keeps metal out of the near field"],
+    ], W6))
+    f.append(Spacer(1, 3 * mm))
+    f.append(P(
+        "<b>The antenna as designed.</b> Antipodal Vivaldi, growth "
+        "a&middot;T = 2.0, 60 mm aperture, <b>tapered feed 4.50 mm at the "
+        "flare to 1.74 mm at the port</b>. The taper is what took the match "
+        "from 4.35&ndash;12.00 GHz to <b>2.48&ndash;12.00 GHz</b>: 99.69% of "
+        "3&ndash;11 GHz below &minus;10 dB, worst &minus;9.98 dB at one "
+        "point, median Re(Z<sub>in</sub>) 45.6 ohm (Section 5). Gain is "
+        "7.02 dBi at 3 GHz, 11.9&ndash;12.5 dBi across 5&ndash;9 GHz and "
+        "9.3 dBi at 11 GHz; the 8&ndash;10 dBi target is met from about "
+        "4 GHz up and <b>not at 3 GHz</b>, which is aperture-limited and "
+        "was shown not fixable by resizing within the board."))
+    f.append(P(
+        "<b>Connector note, from the fabrication drawing.</b> Both named "
+        "parts were checked against their datasheets for the 0.762 mm "
+        "board. An end-launch lands its pin on the 1.74 mm trace at the "
+        "board edge and grounds to the full-width plane on the other face, "
+        "so <b>no pads are drawn and none are needed</b>. The Southwest "
+        "part's 0.0635 in (1.61 mm) dielectric is within 8% of the trace "
+        "width, which is why it launches cleanly. The proposal's INR 400 per "
+        "connector assumes a generic 18 GHz end-launch; the named Southwest "
+        "part is a premium item at roughly ten times that &mdash; price it "
+        "before choosing. Top-ground-tab connectors are supported only with "
+        "a 2.5 mm or wider pad gap and cost the band above 9.6 GHz; avoid "
+        "them."))
+    f.append(fig("vivaldi_fab_drawing.png",
+                 "Fabrication drawing of the antipodal Vivaldi, dimensioned "
+                 "panels only; the full sheet with the connector and pad "
+                 "notes is figures/vivaldi_fab_drawing.pdf. Both faces, "
+                 "150 &times; 90 mm on RO4350B 0.762 mm, feed tapered from "
+                 "4.50 mm at the flare to 1.74 mm at the port.",
+                 crop=(0.29, 0.0, 0.655, 0.51), max_h=108 * mm))
+
+    # ------------------------------------------------------------- cabling
+    f.append(P(f"{pre}4&nbsp;&nbsp;Cabling", "H2k"))
+    f.append(table([
+        H6,
+        ["Test cable", "Phase-stable, SMA&ndash;SMA, 18 GHz, 60 cm",
+         "Mini-Circuits or Pasternack phase-stable", "1", "4,500",
+         "<b>Secure it</b> &mdash; flexing changes phase"],
+        ["Port saver", "SMA female&ndash;female adapter on the VNA port",
+         "SMA F&ndash;F, 18 GHz", "2", "500",
+         "The VNA connector outlives the project; the saver does not"],
+    ], W6))
+    f.append(Spacer(1, 3 * mm))
+    f.append(P(
+        "The error model's cable term is 1 fs RMS delay jitter, i.e. a cable "
+        "that does not move during a scan. Route it along the stage with "
+        "slack at a single fixed bend, not dragged."))
+
+    # --------------------------------------------------------------- stage
+    f.append(P(f"{pre}5&nbsp;&nbsp;The scan stage", "H2k"))
+    f.append(P(
+        "Migration sums phase coherently across positions, so position "
+        "error is phase error: 0.5 mm at 10 GHz in air is about 60 degrees. "
+        "The error model assumes <b>100 &micro;m RMS</b> stage jitter and the "
+        "result tolerated it; build to that."))
+    f.append(table([
+        H6,
+        ["Rail",
+         "At least 60 mm of scan travel (the matrix used 61 positions at "
+         "1 mm, 20&ndash;80 mm); 200 mm gives clearance for the 150 mm "
+         "antenna",
+         "2020 aluminium extrusion, 200 mm", "1", "2,800",
+         "Includes lead screw"],
+        ["Lead screw", "8 mm, <b>anti-backlash nut</b>",
+         "T8 with anti-backlash brass nut", "1", "(incl.)",
+         "Backlash is a systematic position error migration cannot remove"],
+        ["Motor and driver", "NEMA 17, A4988, 12 V 3 A supply",
+         "Standard 3D-printer parts", "1", "1,400",
+         "1 mm per step command; settle 200 ms before each sweep"],
+        ["Home switch", "Mechanical limit switch at one end", "Microswitch",
+         "1", "(incl.)",
+         "Repeatable zero; required for empty-scene subtraction to line up"],
+        ["Controller", "Serial command: step, settle, trigger",
+         "Arduino Nano or ESP32", "1", "600",
+         "The laptop drives the VNA over USB; the controller only moves "
+         "the stage"],
+    ], W6))
+    f.append(Spacer(1, 3 * mm))
+    f.append(fig("measurement_pipeline.png",
+                 "The measurement the stage and fixture must reproduce: "
+                 "61 antenna positions at 1 mm along the bone axis, 12 mm "
+                 "standoff, one S11 sweep per position, then empty-scene "
+                 "subtraction, clutter removal and migration."))
+
+    # ------------------------------------------------------------- fixture
+    f.append(P(f"{pre}6&nbsp;&nbsp;Fixture", "H2k"))
+    f.append(table([
+        H6,
+        ["Antenna holder",
+         "<b>12 mm standoff</b> from aperture to skin, held to "
+         "<b>&plusmn;0.3 mm</b>",
+         "Acrylic or 3D-printed bracket on the stage carriage", "1",
+         "(in 2,500)", "standoff_sigma = 300 &micro;m in the error model"],
+        ["Limb / phantom rest",
+         "Holds the specimen with the bone axis parallel to the rail",
+         "Acrylic cradle", "1", "(in 2,500)",
+         "Tilt shows up as a sloping skin line"],
+        ["Phantom tank", "For casting layered phantoms around the bone",
+         "Acrylic box with lid", "1", "(in 2,500)",
+         "Cast overlay slabs separately (next section)"],
+        ["Frame", "Mounts rail, holder and rest in one rigid assembly",
+         "2020 extrusion and brackets", "1", "2,500 total",
+         "Rigidity is what makes the 100 &micro;m stage spec achievable"],
+    ], W6))
+
+    # ------------------------------------------------------------- phantom
+    f.append(P(f"{pre}7&nbsp;&nbsp;The phantom and specimens", "H2k"))
+    f.append(P(
+        "The simulated layer stack is the casting target. Thicknesses are "
+        "from <i>bonesim/geometry/phantom.py</i>; dielectric targets per "
+        "tissue are in Section 3 (Gabriel four-Cole-Cole)."))
+    f.append(table([
+        ["Layer", "Thickness", "Note"],
+        ["Skin", "2.0 mm", "Low oil fraction"],
+        ["Fat", "3.0 mm", "High oil fraction"],
+        ["Muscle", "1.0 mm", "High water"],
+        ["Near cortical wall", "4.0 mm", "The bone specimen itself"],
+        ["Marrow", "10.0 mm", "The bone specimen itself"],
+        ["<b>Soft-tissue overlay</b>", "<b>0, 3, 6, 10 mm</b>",
+         "The four experimental conditions; cast as separate slabs laid "
+         "over the skin layer"],
+    ], [45 * mm, 30 * mm, 88 * mm], highlight=[6]))
+    f.append(Spacer(1, 3 * mm))
+    f.append(table([
+        H6,
+        ["Phantom materials", "Oil-in-gelatin recipe (proposal 4.3)",
+         "DI water 50&ndash;70%, porcine gelatin 250 bloom 10&ndash;15%, "
+         "kerosene or safflower oil 15&ndash;35% (the tuning knob), "
+         "surfactant 1&ndash;2%, n-propanol 0&ndash;5%, p-toluic acid "
+         "under 0.5%, NaCl 0&ndash;1%",
+         "&ndash;", "1,800",
+         "Oil fraction sets permittivity 10&ndash;50; <b>measure each "
+         "batch</b> with an open-ended coaxial probe on the VNA"],
+        ["Bone specimens",
+         "Mid-shaft, about 4 mm cortical wall, about 10 mm medullary cavity",
+         "Goat or bovine tibia, fresh from a butcher", "6&ndash;12", "900",
+         "Defat mechanically; <b>do not boil</b>; store in saline gauze at "
+         "4 &deg;C"],
+        ["Fracture fill", "Blood-mimicking fluid; haematoma is the real "
+         "contrast", "Saline-based blood mimic", "&ndash;", "(in 1,800)",
+         "The simulation used Gabriel blood"],
+        ["Validation target", "<b>6 mm brass rod at 20 mm depth</b>",
+         "Brass rod, 6 mm diameter, 100 mm", "1", "200",
+         "<b>Stage 4 gate: image this before any bone.</b> If migration "
+         "cannot find it, nothing downstream is meaningful"],
+        ["Kerf tools",
+         "Kerfs of 0.2&ndash;2.0 mm were simulated; the saw sets what is "
+         "achievable", "Jeweller's saw, diamond wafering blade", "&ndash;",
+         "(in 1,200)",
+         "Measure the actual kerf; the measurement is the ground truth"],
+        ["Metrology", "&ndash;", "Digital calliper, feeler gauges",
+         "&ndash;", "(in 1,200)",
+         "Record every kerf and every cortical thickness as covariates"],
+        ["Consumables", "&ndash;", "Cling film, gloves, saw blades",
+         "&ndash;", "1,200", "&ndash;"],
+    ], W6))
+
+    # ------------------------------------------------------------- compute
+    f.append(P(f"{pre}8&nbsp;&nbsp;Compute and software", "H2k"))
+    f.append(P("Nothing to buy. The laptop that ran the analysis runs the "
+               "acquisition."))
+    f.append(table([
+        ["Item", "Note"],
+        ["<i>bonesim</i> package",
+         "Processing chain, detector, statistics &mdash; unchanged between "
+         "simulation and bench"],
+        ["VNA control",
+         "scikit-rf and pyvisa for a lab VNA; LiteVNA and NanoVNA have "
+         "serial protocols with Python libraries"],
+        ["Stage control", "Serial to the Arduino or ESP32"],
+    ], [40 * mm, 123 * mm]))
+    f.append(Spacer(1, 3 * mm))
+    f.append(P(
+        "The processing chain was built so that it cannot tell the analytic "
+        "model, the FDTD solver and a real VNA apart: it sees a matrix of "
+        "complex S11 and nothing else. That is the point at which the "
+        "simulation hands over to the bench."))
+
+    # ----------------------------------------------------- what it tests
+    f.append(P(f"{pre}9&nbsp;&nbsp;What the build would test that the "
+               "simulation could not", "H2k"))
+    f.append(P("In order of how much they threaten the result (Section 8):"))
+    for t in [
+        "<b>The error model.</b> 95 dB dynamic range, 100 &micro;m stage "
+        "jitter, 1 fs cable jitter and &plusmn;0.3 mm standoff are "
+        "assumptions. The 40.8 dB margin is the budget the real bench has to "
+        "stay inside. This is what a brass rod and a VNA measure on day one.",
+        "<b>Real bone.</b> Eight simulated specimens vary only in what the "
+        "variation model perturbs. Goat tibiae vary in everything.",
+        "<b>Fracture position.</b> Every simulated fracture is at "
+        "x = 50 mm. A real cut is wherever the saw went, which tests "
+        "localisation rather than separability.",
+        "<b>Three dimensions.</b> The bench is 3D for free. The 3D model "
+        "(<i>bonesim/geometry/cylindrical.py</i>) is built and verified but "
+        "unsolved.",
+    ]:
+        f.append(P(t, "Body"))
+
+
 def build():
     doc = BaseDocTemplate(str(OUT), pagesize=A4,
                           leftMargin=23 * mm, rightMargin=23 * mm,
@@ -1005,6 +1382,7 @@ def build():
     conclusions(f)
     reproducibility(f)
     references(f)
+    appendix_bom(f)
     doc.build(f)
     kb = OUT.stat().st_size / 1024
     print(f"  wrote {OUT.name}  {kb:.0f} kB")

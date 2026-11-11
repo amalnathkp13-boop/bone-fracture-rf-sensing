@@ -14,6 +14,8 @@ Totals from the proposal, which this document does not change:
 | with a department VNA (recommended) | **INR 23,800** |
 | with the LiteVNA-64 fallback | **INR 32,800** |
 
+`docs/bill-of-materials.pdf` is this document typeset (`python
+scripts/make_bom_pdf.py`), and it is also Appendix A of the submission report.
 `docs/bill-of-materials.csv` is the same list as a spreadsheet. It carries all
 three VNA options, so its column sum (INR 42,700) is not a configuration total;
 pick one VNA row.
